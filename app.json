@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "PayFirst",
+    "slug": "PayFirst",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/lock.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/lock.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.mashikuallen.PayFirst"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f85be193-8f92-4577-b366-4f1dbf5731af"
+      }
+    }
+  }
+}
