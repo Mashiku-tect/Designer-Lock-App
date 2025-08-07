@@ -1,5 +1,7 @@
-import React, { useState,useContext } from 'react';
+import React, { useState,useContext,useEffect  } from 'react';
 import { AuthContext } from '../AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { 
   View, 
   Text, 
@@ -15,75 +17,114 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialIcons, Feather, FontAwesome, Entypo } from '@expo/vector-icons';
 
+
+
 const ProfileScreen = ({ navigation }) => {
   // User data state
-  const [user, setUser] = useState({
-    name: 'Alex Johnson',
-    username: '@alexjohnson',
-    bio: 'Digital designer & photographer. Creating beautiful experiences through design.',
-    email: 'alex.johnson@example.com',
-    phone: '+1 (555) 123-4567',
-    location: 'San Francisco, CA',
-    website: 'alexjohnson.design',
-    instagram: '@alexjohnson',
-    twitter: '@alexjohnson',
-    followers: 1243,
-    following: 562,
-    posts: 87,
-  });
+  const [user, setUser] = useState(null);
 
-  // Edit states
   const [isEditing, setIsEditing] = useState(false);
   const [editField, setEditField] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [profileImage, setProfileImage] = useState('https://randomuser.me/api/portraits/men/1.jpg');
+ const [profileimage, setProfileImage] = useState(null);
+
+  //fetch user data
+const fetchUserProfile = async () => {
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    if (!token) {
+        console.warn('No token found');
+        return;
+      }
+    const res = await axios.get('https://6d278b6c5fda.ngrok-free.app/api/profile', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setUser(res.data.user);
+    console.log('Fetched user profile:', res.data.user);
+    setProfileImage(`https://6d278b6c5fda.ngrok-free.app${res.data.user.profileimage}`);
+  } catch (err) {
+    console.error('Error fetching profile:', err);
+    Alert.alert('Error', 'Failed to load profile');
+  }
+};
+
+useEffect(() => {
+  console.log("Running fetchUserProfile...");
+  fetchUserProfile();
+}, []);
+
+//Upload profile image function
+const uploadImage = async (uri) => {
+  const token = await AsyncStorage.getItem('userToken');
+  const formData = new FormData();
+  formData.append('image', {
+    uri,
+    name: 'profile.jpg',
+    type: 'image/jpeg',
+  });
+
+  try {
+    const res = await axios.put('https://6d278b6c5fda.ngrok-free.app/api/profile/image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const newImageUrl = `https://6d278b6c5fda.ngrok-free.app${res.data.profileImage}`;
+    setProfileImage(newImageUrl);
+    setLoading(false);
+    setModalVisible(false);
+    Alert.alert('Success', 'Profile image updated');
+  } catch (err) {
+    console.error('Upload failed:', err);
+    setLoading(false);
+    Alert.alert('Error', 'Image upload failed');
+  }
+};
+
+
+//end of fetch user profile
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const { logout } = useContext(AuthContext);
 
   // Handle image upload
   const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
+  let result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 1,
+  });
 
-    if (!result.canceled) {
-      setLoading(true);
-      // Simulate upload
-      setTimeout(() => {
-        setProfileImage(result.assets[0].uri);
-        setLoading(false);
-      }, 1500);
-    }
-  };
+  if (!result.canceled) {
+    setLoading(true);
+    uploadImage(result.assets[0].uri);
+  }
+};
+
 
   // Take photo
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'We need camera permission to take photos');
-      return;
-    }
+ const takePhoto = async () => {
+  const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  if (status !== 'granted') {
+    Alert.alert('Permission required', 'We need camera permission to take photos');
+    return;
+  }
 
-    let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
+  let result = await ImagePicker.launchCameraAsync({
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 1,
+  });
 
-    if (!result.canceled) {
-      setLoading(true);
-      // Simulate upload
-      setTimeout(() => {
-        setProfileImage(result.assets[0].uri);
-        setLoading(false);
-        setModalVisible(false);
-      }, 1500);
-    }
-  };
+  if (!result.canceled) {
+    setLoading(true);
+    uploadImage(result.assets[0].uri);
+  }
+};
+
 
   // Start editing a field
   const startEditing = (field, value) => {
@@ -93,14 +134,47 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   // Save edited field
-  const saveEdit = () => {
-    setUser({ ...user, [editField]: editValue });
+  // const saveEdit = () => {
+  //   setUser({ ...user, [editField]: editValue });
+  //   setIsEditing(false);
+  //   setEditField(null);
+  //   setEditValue('');
+  // };
+  const saveEdit = async () => {
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+
+    const updatedField = { [editField]: editValue };
+
+    setLoading(true);
+
+    const response = await axios.put('https://6d278b6c5fda.ngrok-free.app/api/updateprofile', updatedField, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    // Update user state with new data from backend (or local if not returned)
+    setUser(prevUser => ({
+      ...prevUser,
+      [editField]: editValue,
+    }));
+
+    Alert.alert('Success', `${editField} updated successfully`);
+  } catch (error) {
+    console.error(`Failed to update ${editField}:`, error);
+    Alert.alert('Error', `Failed to update ${editField}`);
+  } finally {
+    setLoading(false);
     setIsEditing(false);
     setEditField(null);
     setEditValue('');
-  };
+  }
+};
 
-  return (
+
+  if(!user || loading) {
+ return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
@@ -117,7 +191,7 @@ const ProfileScreen = ({ navigation }) => {
           {loading ? (
             <ActivityIndicator size="large" color="#4a6bff" />
           ) : (
-            <Image source={{ uri: profileImage }} style={styles.profileImage} />
+            <Image source={{ uri:profileimage }} style={styles.profileImage} />
           )}
           <TouchableOpacity 
             style={styles.cameraButton}
@@ -129,8 +203,8 @@ const ProfileScreen = ({ navigation }) => {
 
         {/* Name and Username */}
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.username}>{user.username}</Text>
+          <Text style={styles.name}>{user.firstname}</Text>
+          {/* <Text style={styles.username}>{user.username}</Text> */}
         </View>
 
         {/* Bio */}
@@ -146,17 +220,11 @@ const ProfileScreen = ({ navigation }) => {
         {/* Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.posts}</Text>
-            <Text style={styles.statLabel}>Posts</Text>
+  
+            <Text style={styles.statLabel}>Total Works Completed Or Done Before </Text>
+            <Text style={styles.statNumber}>{user.posts} Posts</Text>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.followers}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.following}</Text>
-            <Text style={styles.statLabel}>Following</Text>
-          </View>
+         
         </View>
 
         {/* Personal Info */}
@@ -174,14 +242,14 @@ const ProfileScreen = ({ navigation }) => {
             icon="phone" 
             label="Phone" 
             value={user.phone} 
-            onPress={() => startEditing('phone', user.phone)}
+            onPress={() => startEditing('phone', user.phonenumber)}
           />
           
           <InfoItem 
             icon="map-pin" 
             label="Location" 
             value={user.location} 
-            onPress={() => startEditing('location', user.location)}
+            onPress={() => startEditing('location', 'Tanzania')}
           />
         </View>
 
@@ -207,7 +275,13 @@ const ProfileScreen = ({ navigation }) => {
             icon="twitter" 
             label="Twitter" 
             value={user.twitter} 
-            onPress={() => startEditing('twitter', user.twitter)}
+            onPress={() => startEditing('twitter', user.x)}
+          />
+           <InfoItem 
+            icon="whatsapp" 
+            label="WhatsApp" 
+            value={user.whatsapp} 
+            onPress={() => startEditing('Whatsapp', user.phonenumber)}
           />
         </View>
 
@@ -320,6 +394,7 @@ const ProfileScreen = ({ navigation }) => {
       </Modal>
     </View>
   );
+  }
 };
 
 // Reusable Info Item Component
@@ -463,7 +538,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#888',
   },
   infoItem: {

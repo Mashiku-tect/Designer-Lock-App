@@ -209,6 +209,7 @@ const handleDeleteOrder = (productId) => {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
+          <Text style={styles.sectionTitle}>Dashboard Stats</Text>
           <View style={styles.statsContainer}>
             <View style={[styles.statCard, { backgroundColor: '#4a6bff' }]}>
               <Text style={styles.statValue}>{dashboardData?.activeOrders}</Text>
@@ -218,7 +219,21 @@ const handleDeleteOrder = (productId) => {
               <Text style={styles.statValue}>Tsh {dashboardData?.monthlyRevenue?.toFixed(2)}</Text>
               <Text style={styles.statLabel}>This Month</Text>
             </View>
+         
           </View>
+
+          {/* duplicate views */}
+          <View style={styles.statsContainer}>
+            <View style={[styles.statCard, { backgroundColor: '#4a6bff' }]}>
+              <Text style={styles.statValue}>Tsh {dashboardData?.todayRevenue?.toFixed(2)}</Text>
+              <Text style={styles.statLabel}>Today</Text>
+            </View>
+            <View style={[styles.statCard, { backgroundColor: '#6c5ce7' }]}>
+              <Text style={styles.statValue}>Tsh {dashboardData?.weeklyRevenue?.toFixed(2)}</Text>
+              <Text style={styles.statLabel}>This Week</Text>
+            </View>
+          </View>
+          {/* end of duplicate views */}
 
           <Text style={styles.sectionTitle}>Recent Orders</Text>
           {dashboardData?.orders?.map(order => (

@@ -1,6 +1,8 @@
 const db = require('../config/db');
 const Order = require('../models/Product'); // Assuming Order is a model for orders
 const User = require('../models/User');
+const moment = require('moment');
+const { Op } = require('sequelize');
 
 exports.getDashboardData = async (req, res) => {
   try {
@@ -27,6 +29,38 @@ exports.getDashboardData = async (req, res) => {
     });
     const monthlyRevenue = monthlyOrders.reduce((sum, order) => sum + parseFloat(order.price || 0), 0);
 
+    //Computing today and Weekly revenue
+   
+    const todayStart = moment().startOf('day').toDate();
+    const todayEnd = moment().endOf('day').toDate();
+
+    // Get start of the current week (Sunday by default, or use .startOf('isoWeek') for Monday)
+    const weekStart = moment().startOf('isoWeek').toDate();
+    const now = new Date();
+
+    // Today's Revenue
+    const todayRevenue = await Order.sum('price', {
+      where: {
+        createdAt: {
+           user_id,
+           status: 'Completed',
+          [Op.between]: [todayStart, todayEnd],
+        },
+      },
+    });
+
+    // Weekly Revenue
+    const weeklyRevenue = await Order.sum('price', {
+      where: {
+        user_id,
+        status: 'Completed',
+        createdAt: {
+          [Op.between]: [weekStart, now],
+        },
+      },
+    });
+
+
     // Get recent orders (latest 5)
     const recentOrders = await Order.findAll({
       where: { user_id },
@@ -40,9 +74,12 @@ exports.getDashboardData = async (req, res) => {
     res.json({
       name: user.firstname,
       activeOrders:activeOrders,
-      monthlyRevenue:monthlyRevenue,
+      monthlyRevenue:monthlyRevenue ||0,
       orders: recentOrders,
-      haseverloggedin: user.haseverloggedin
+      haseverloggedin: user.haseverloggedin,
+      weeklyRevenue: weeklyRevenue || 0,
+      todayRevenue: todayRevenue || 0,
+
     });
 
      //check user if has ever logged in before

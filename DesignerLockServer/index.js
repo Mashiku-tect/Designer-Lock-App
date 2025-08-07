@@ -19,7 +19,8 @@ const dashboardRoutes = require('./routes/DashboardRoutes');
 const searchRoutes = require('./routes/SearchRoutes');
 const checkpayment= require('./routes/PaymentRoutes');
 const orderRoutes = require('./routes/OrderRoutes');
-app.use('/api', checkpayment);
+const profileRoutes = require('./routes/ProfileRoutes');
+
 app.use('/uploads', express.static('uploads'));
 
 app.use('/api', orderRoutes);
@@ -27,6 +28,8 @@ app.use('/api', dashboardRoutes);
 app.use('/api', searchRoutes);
 app.use('/api', loginRoutes);
 app.use('/api', authRoutes);
+app.use('/api', profileRoutes);
+app.use('/api', checkpayment);
 
 // Test DB connection
 sequelize.authenticate()
