@@ -31,7 +31,7 @@ export default function ProductScreen({ route, navigation }) {
         const token = await AsyncStorage.getItem('userToken');
         if (!token) return;
 
-        const response = await axios.post('https://6d278b6c5fda.ngrok-free.app/api/checkpayment',
+        const response = await axios.post('https://1456e82332dc.ngrok-free.app/api/checkpayment',
           {
             productId: product.id
           },
@@ -72,7 +72,7 @@ export default function ProductScreen({ route, navigation }) {
               }
 
               const response = await axios.post(
-                'https://6d278b6c5fda.ngrok-free.app/api/pay',
+                'https://1456e82332dc.ngrok-free.app/api/pay',
                 {
                   productId: product.id,
                   amount: product.price.replace('Tsh:', ''),

@@ -29,7 +29,7 @@ const handleRegister = async () => {
   }
 
 try {
-  const res = await axios.post('https://6d278b6c5fda.ngrok-free.app/api/register', {
+  const res = await axios.post('https://1456e82332dc.ngrok-free.app/api/register', {
     firstname,
     lastname,
     email,

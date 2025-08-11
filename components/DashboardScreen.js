@@ -34,7 +34,7 @@ export default function DashboardScreen({ navigation }) {
         return;
       }
       const res = await axios.get(
-        'https://6d278b6c5fda.ngrok-free.app/api/dashboard',
+        'https://1456e82332dc.ngrok-free.app/api/dashboard',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -115,12 +115,12 @@ const handleDeleteOrder = (productId) => {
     }
     try {
       setLoading(true);
-      const res = await axios.get(`https://6d278b6c5fda.ngrok-free.app/api/search?q=${text}`);
+      const res = await axios.get(`https://1456e82332dc.ngrok-free.app/api/search?q=${text}`);
       const formatted = res.data.map(product => ({
         id: product.product_id,
         title: product.designtitle,
         price: "Tsh:" + product.price,
-        image: { uri: `https://6d278b6c5fda.ngrok-free.app/${product.productimagepath.replace(/\\/g, '/')}` }
+        image: { uri: `https://1456e82332dc.ngrok-free.app/${product.productimagepath.replace(/\\/g, '/')}` }
       }));
       setSearchResults(formatted);
     } catch (error) {
