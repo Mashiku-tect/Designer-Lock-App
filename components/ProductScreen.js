@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
   PermissionsAndroid,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +25,7 @@ export default function ProductScreen({ route, navigation }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkPaymentStatus = async () => {
@@ -31,7 +33,7 @@ export default function ProductScreen({ route, navigation }) {
         const token = await AsyncStorage.getItem('userToken');
         if (!token) return;
 
-        const response = await axios.post('https://1456e82332dc.ngrok-free.app/api/checkpayment',
+        const response = await axios.post('https://1a4f66175ccc.ngrok-free.app/api/checkpayment',
           {
             productId: product.id
           },
@@ -45,10 +47,14 @@ export default function ProductScreen({ route, navigation }) {
 
         if (response.data.hasPaid) {
           setIsPaid(true);
+          //setLoading(false);
         }
       } catch (err) {
         console.error('Error checking payment status:', err);
       }
+      finally {
+      setLoading(false); // ✅ Always stop spinner after the request
+    }
     };
 
     checkPaymentStatus();
@@ -72,7 +78,7 @@ export default function ProductScreen({ route, navigation }) {
               }
 
               const response = await axios.post(
-                'https://1456e82332dc.ngrok-free.app/api/pay',
+                'https://1a4f66175ccc.ngrok-free.app/api/pay',
                 {
                   productId: product.id,
                   amount: product.price.replace('Tsh:', ''),
@@ -171,6 +177,13 @@ export default function ProductScreen({ route, navigation }) {
     </View>
   );
 
+  if(loading){
+     return (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#0000ff" />
+          </View>
+        );
+  }
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -360,5 +373,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
     marginLeft: -24,
+  },
+   center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

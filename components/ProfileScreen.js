@@ -1,4 +1,4 @@
-import React, { useState,useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../AuthContext';
 import { 
   View, 
@@ -10,38 +10,100 @@ import {
   Image, 
   Modal,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons, MaterialIcons, Feather, FontAwesome, Entypo } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather, Entypo } from '@expo/vector-icons';
+import axios from 'axios';
 
 const ProfileScreen = ({ navigation }) => {
-  // User data state
-  const [user, setUser] = useState({
-    name: 'Alex Johnson',
-    username: '@alexjohnson',
-    bio: 'Digital designer & photographer. Creating beautiful experiences through design.',
-    email: 'alex.johnson@example.com',
-    phone: '+1 (555) 123-4567',
-    location: 'San Francisco, CA',
-    website: 'alexjohnson.design',
-    instagram: '@alexjohnson',
-    twitter: '@alexjohnson',
-    followers: 1243,
-    following: 562,
-    posts: 87,
-  });
+  const { logout, userToken } = useContext(AuthContext); // Assuming you get token from context
 
-  // Edit states
+  const [user, setUser] = useState(null);  // null until fetched
+  const [profileImage, setProfileImage] = useState(null);
+  const [loading, setLoading] = useState(true);  // loading user data initially
+  const [uploading, setUploading] = useState(false); // for image upload spinner
+
   const [isEditing, setIsEditing] = useState(false);
   const [editField, setEditField] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const [profileImage, setProfileImage] = useState('https://randomuser.me/api/portraits/men/1.jpg');
-  const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const { logout } = useContext(AuthContext);
 
-  // Handle image upload
+  const BASE_URL = "https://1a4f66175ccc.ngrok-free.app";
+  // Fetch user data from backend on mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get('https://1a4f66175ccc.ngrok-free.app/api/profile', {
+          headers: {
+            Authorization: `Bearer ${userToken}`,
+          },
+        });
+        setUser(response.data);
+      const data = response.data;
+//setUser(data);
+
+const fullImageUrl = data.profileimage
+  ? `${BASE_URL}/${data.profileimage.replace(/^\/+/, '')}`
+  : 'https://randomuser.me/api/portraits/men/1.jpg';
+
+setProfileImage(fullImageUrl);
+        
+// console.log(response.data);
+      } catch (error) {
+        Alert.alert('Error', 'Failed to load user data');
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [userToken]);
+
+  // Upload profile image to backend
+  const uploadImage = async (imageUri) => {
+    try {
+      setUploading(true);
+      const formData = new FormData();
+
+      // Extract filename and type from URI
+      const filename = imageUri.split('/').pop();
+      let match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : `image`;
+
+      formData.append('profileimage', {
+        uri: Platform.OS === 'ios' ? imageUri.replace('file://', '') : imageUri,
+        name: filename,
+        type,
+      });
+
+      //upload the user profile image
+      const response = await axios.post('https://1a4f66175ccc.ngrok-free.app/api/profile/image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${userToken}`,
+        },
+      });
+
+      // Assume response returns the new profile image URL
+      setProfileImage(response.data.profileImageUrl);
+      // Update user state with new profile image URL if needed
+      setUser((prev) => ({ ...prev, profileImage: response.data.profileImageUrl }));
+
+      Alert.alert('Success', 'Profile image updated successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to upload profile image');
+      console.error(error);
+    } finally {
+      setUploading(false);
+      setModalVisible(false);
+    }
+  };
+
+  // Handle image picker from library
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -51,16 +113,13 @@ const ProfileScreen = ({ navigation }) => {
     });
 
     if (!result.canceled) {
-      setLoading(true);
-      // Simulate upload
-      setTimeout(() => {
-        setProfileImage(result.assets[0].uri);
-        setLoading(false);
-      }, 1500);
+      const selectedUri = result.assets[0].uri;
+      setProfileImage(selectedUri); // optimistic UI update
+      await uploadImage(selectedUri);
     }
   };
 
-  // Take photo
+  // Take photo with camera
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -75,13 +134,9 @@ const ProfileScreen = ({ navigation }) => {
     });
 
     if (!result.canceled) {
-      setLoading(true);
-      // Simulate upload
-      setTimeout(() => {
-        setProfileImage(result.assets[0].uri);
-        setLoading(false);
-        setModalVisible(false);
-      }, 1500);
+      const capturedUri = result.assets[0].uri;
+      setProfileImage(capturedUri); // optimistic UI update
+      await uploadImage(capturedUri);
     }
   };
 
@@ -92,13 +147,44 @@ const ProfileScreen = ({ navigation }) => {
     setIsEditing(true);
   };
 
-  // Save edited field
-  const saveEdit = () => {
-    setUser({ ...user, [editField]: editValue });
-    setIsEditing(false);
-    setEditField(null);
-    setEditValue('');
+  // Save edited field - send to backend
+  const saveEdit = async () => {
+    try {
+      setLoading(true);
+      // Update user field API call
+      const updatedData = { [editField]: editValue };
+      await axios.put('https://1a4f66175ccc.ngrok-free.app/api/updateprofile', updatedData, {
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+        },
+      });
+      setUser((prev) => ({ ...prev, ...updatedData }));
+      setIsEditing(false);
+      setEditField(null);
+      setEditValue('');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update profile');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#4a6bff" />
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={styles.center}>
+        <Text>Failed to load user data.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -114,7 +200,7 @@ const ProfileScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Profile Image Section */}
         <View style={styles.profileImageContainer}>
-          {loading ? (
+          {(uploading) ? (
             <ActivityIndicator size="large" color="#4a6bff" />
           ) : (
             <Image source={{ uri: profileImage }} style={styles.profileImage} />
@@ -129,8 +215,8 @@ const ProfileScreen = ({ navigation }) => {
 
         {/* Name and Username */}
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.username}>{user.username}</Text>
+          <Text style={styles.name}>{user.firstname+" "+user.lastname}</Text>
+          {/* <Text style={styles.username}>{user.username}</Text> */}
         </View>
 
         {/* Bio */}
@@ -150,11 +236,11 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.statLabel}>Posts</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.followers}</Text>
+            <Text style={styles.statNumber}>{user.followers || 0}</Text>
             <Text style={styles.statLabel}>Followers</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.following}</Text>
+            <Text style={styles.statNumber}>{user.following || 0}</Text>
             <Text style={styles.statLabel}>Following</Text>
           </View>
         </View>
@@ -173,14 +259,14 @@ const ProfileScreen = ({ navigation }) => {
           <InfoItem 
             icon="phone" 
             label="Phone" 
-            value={user.phone} 
-            onPress={() => startEditing('phone', user.phone)}
+            value={user.phonenumber} 
+            onPress={() => startEditing('phone', user.phonenumber)}
           />
           
           <InfoItem 
             icon="map-pin" 
             label="Location" 
-            value={user.location} 
+            value={user.location || 'Not specified'} 
             onPress={() => startEditing('location', user.location)}
           />
         </View>
@@ -205,9 +291,9 @@ const ProfileScreen = ({ navigation }) => {
           
           <InfoItem 
             icon="twitter" 
-            label="Twitter" 
-            value={user.twitter} 
-            onPress={() => startEditing('twitter', user.twitter)}
+            label="X" 
+            value={user.x} 
+            onPress={() => startEditing('twitter', user.x)}
           />
         </View>
 
@@ -305,8 +391,7 @@ const ProfileScreen = ({ navigation }) => {
                 setModalVisible(false);
               }}
             >
-              <MaterialIcons name="delete" size={24} color="#ff4444" />
-              <Text style={styles.imageOptionTextDelete}>Remove Current Photo</Text>
+              
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -352,6 +437,7 @@ const ActionButton = ({ icon, label, onPress, isLast }) => (
 );
 
 const styles = StyleSheet.create({
+  // ... your existing styles here, unchanged ...
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -367,7 +453,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    marginTop:20
+    marginTop:0
   },
   headerTitle: {
     fontSize: 18,
@@ -520,8 +606,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  modalInput: {
+ modalInput: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
@@ -561,6 +649,7 @@ const styles = StyleSheet.create({
   imageOption: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: '',
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -569,6 +658,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 15,
     color: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   imageOptionTextDelete: {
     fontSize: 16,
@@ -583,6 +674,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#4a6bff',
+  },
+   center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 

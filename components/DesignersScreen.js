@@ -1,101 +1,83 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DesignersScreen = ({ navigation }) => {
+  const BASE_URL = "https://1a4f66175ccc.ngrok-free.app/";
   const [designers, setDesigners] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredDesigners, setFilteredDesigners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  //const [currentUserId, setCurrentUserId] = useState(null);
 
-  // Mock data - replace with your actual data fetching logic
+
+ 
+
   useEffect(() => {
-    const mockDesigners = [
-      {
-        id: '1',
-        name: 'Sarah Johnson',
-        specialty: 'Logo Design',
-        experience: '5 years',
-        rating: 4.8,
-        image: 'https://randomuser.me/api/portraits/women/44.jpg',
-        bio: 'Specialized in minimalist logo designs and brand identity.'
-      },
-      {
-        id: '2',
-        name: 'Michael Chen',
-        specialty: 'UI/UX Design',
-        experience: '7 years',
-        rating: 4.9,
-        image: 'https://randomuser.me/api/portraits/men/32.jpg',
-        bio: 'Passionate about creating intuitive user experiences.'
-      },
-      {
-        id: '3',
-        name: 'Emma Williams',
-        specialty: 'Print Design',
-        experience: '4 years',
-        rating: 4.7,
-        image: 'https://randomuser.me/api/portraits/women/68.jpg',
-        bio: 'Expert in business cards, brochures and packaging design.'
-      },
-      {
-        id: '4',
-        name: 'David Kim',
-        specialty: 'Illustration',
-        experience: '6 years',
-        rating: 4.9,
-        image: 'https://randomuser.me/api/portraits/men/75.jpg',
-        bio: 'Creative illustrator with a unique cartoon style.'
-      },
-      {
-        id: '5',
-        name: 'Lisa Rodriguez',
-        specialty: 'Web Design',
-        experience: '3 years',
-        rating: 4.6,
-        image: 'https://randomuser.me/api/portraits/women/63.jpg',
-        bio: 'Focuses on responsive and accessible web designs.'
-      },
-      {
-        id: '6',
-        name: 'Nainei Mawazo',
-        specialty: 'Web Design',
-        experience: '3 years',
-        rating: 4.6,
-        image: 'https://randomuser.me/api/portraits/women/53.jpg',
-        bio: 'Focuses on responsive and accessible web designs.'
-      },
-      {
-        id: '7',
-        name: 'Allen Mashiku',
-        specialty: 'Web Design',
-        experience: '3 years',
-        rating: 4.6,
-        image: 'https://randomuser.me/api/portraits/men/53.jpg',
-        bio: 'Focuses on responsive and accessible web designs.'
-      },
-    ];
-    
-    setDesigners(mockDesigners);
-    setFilteredDesigners(mockDesigners);
+    const fetchDesigners = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken'); 
+     const response = await fetch(`${BASE_URL}api/designers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch designers');
+      }
+        const data = await response.json();
+
+     
+
+        // Map designers to include full image URL (fall back to placeholder)
+        const designersWithFullImageUrl = data.map(d => ({
+          ...d,
+          image: d.profileimage
+            ? `${BASE_URL}${d.profileimage}`
+            : 'https://randomuser.me/api/portraits/men/1.jpg',
+        }));
+
+        setDesigners(designersWithFullImageUrl);
+        setFilteredDesigners(designersWithFullImageUrl);
+      } catch (error) {
+        console.error("Failed to fetch designers:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDesigners();
   }, []);
 
-  // Filter designers based on search query
   useEffect(() => {
     if (searchQuery.trim() === '') {
       setFilteredDesigners(designers);
     } else {
       const filtered = designers.filter(designer =>
-        designer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        designer.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+        (designer.firstname || '')
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        (designer.specialty || '')
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
       );
       setFilteredDesigners(filtered);
     }
   }, [searchQuery, designers]);
 
   const handleMessageDesigner = (designer) => {
-    // Navigate to chat screen with the designer
     navigation.navigate('ChatScreen', { designer });
   };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#4a6bff" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -115,7 +97,7 @@ const DesignersScreen = ({ navigation }) => {
         <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search designers by name..."
+          placeholder="Search designers by name"
           placeholderTextColor="#999"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -126,21 +108,18 @@ const DesignersScreen = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.designersContainer}>
         {filteredDesigners.length > 0 ? (
           filteredDesigners.map(designer => (
-            <View key={designer.id} style={styles.designerCard}>
-              <Image source={{ uri: designer.image }} style={styles.designerImage} />
-              
+            <View key={designer.user_id} style={styles.designerCard}>
+              <Image
+               source={{ uri: `https://1a4f66175ccc.ngrok-free.app/${designer.profileimage}` }}
+
+                style={styles.designerImage}
+                defaultSource={require('../assets/profile-placeholder.png')}
+              />
               <View style={styles.designerInfo}>
-                <Text style={styles.designerName}>{designer.name}</Text>
-                <Text style={styles.designerSpecialty}>{designer.specialty}</Text>
-                <View style={styles.ratingContainer}>
-                  <Ionicons name="star" size={16} color="#FFD700" />
-                  <Text style={styles.ratingText}>{designer.rating}</Text>
-                  <Text style={styles.experienceText}>• {designer.experience} experience</Text>
-                </View>
+                <Text style={styles.designerName}>{designer.firstname+" "+designer.lastname}</Text>
                 <Text style={styles.designerBio} numberOfLines={2}>{designer.bio}</Text>
               </View>
-              
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.messageButton}
                 onPress={() => handleMessageDesigner(designer)}
               >
@@ -162,10 +141,11 @@ const DesignersScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  // ... Your existing styles unchanged ...
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-    marginTop: 25
+    marginTop: 0,
   },
   header: {
     flexDirection: 'row',
@@ -185,11 +165,13 @@ const styles = StyleSheet.create({
   headerTitleContainer: {
     flex: 1,
     alignItems: 'center',
+    
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#4a6bff',
+    marginTop: 0,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -244,26 +226,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 2,
-  },
-  designerSpecialty: {
-    fontSize: 14,
-    color: '#4a6bff',
-    marginBottom: 5,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  ratingText: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 4,
-    marginRight: 10,
-  },
-  experienceText: {
-    fontSize: 14,
-    color: '#666',
   },
   designerBio: {
     fontSize: 13,

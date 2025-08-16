@@ -14,11 +14,15 @@ import ForgotPasswordScreen from './components/ForgotPasswordScreen';
 import DesignersScreen from './components/DesignersScreen';
 import ChatScreen from './components/ChatScreen';
 import ProductScreen from './components/ProductScreen';
-import ProfileScreen from './components/ProfileScreen';
+import ProfileScreen from './components/ProfileScreen'; // Ensure this path is correct
 
 import { AuthProvider, AuthContext } from './AuthContext';
 
 const Stack = createStackNavigator();
+
+// AsyncStorage.clear().then(() => {
+//   console.log('Storage cleared!');
+// });
 
 const AuthStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>

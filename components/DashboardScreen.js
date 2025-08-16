@@ -6,15 +6,17 @@ import {
   ScrollView, Image, TextInput, FlatList, SafeAreaView, RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Alert } from 'react-native';
+import { Alert,ActivityIndicator } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 
 export default function DashboardScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [refreshing, setRefreshing] = useState(false); // 🔁 Refresh state
+  const [profileImage, setProfileImage] = useState(null);
 
   const currentHour = new Date().getHours();
   let greeting;
@@ -26,6 +28,18 @@ export default function DashboardScreen({ navigation }) {
     greeting = 'Good Evening';
   }
 
+  
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  
+ useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData(); // Refresh every time dashboard is focused
+    }, [])
+  );
+
   const fetchDashboardData = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -34,7 +48,7 @@ export default function DashboardScreen({ navigation }) {
         return;
       }
       const res = await axios.get(
-        'https://1456e82332dc.ngrok-free.app/api/dashboard',
+        'https://1a4f66175ccc.ngrok-free.app/api/dashboard',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -42,6 +56,11 @@ export default function DashboardScreen({ navigation }) {
         }
       );
       setDashboardData(res.data);
+      setLoading(false);
+      setProfileImage(`https://1a4f66175ccc.ngrok-free.app/${res.data.profileimage.replace(/\\/g, '/')}`);
+
+      //console.log(res.data.profileimage);
+        
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     }
@@ -70,7 +89,7 @@ const handleDeleteOrder = (productId) => {
             }
 
             const response = await axios.delete(
-              `https://6d278b6c5fda.ngrok-free.app/api/orders/${productId}`,
+              `https://1a4f66175ccc.ngrok-free.app/api/orders/${productId}`,
               {
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -96,9 +115,6 @@ const handleDeleteOrder = (productId) => {
 };
    
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
 
   // 🔁 Handle pull-to-refresh
   const onRefresh = useCallback(async () => {
@@ -114,13 +130,13 @@ const handleDeleteOrder = (productId) => {
       return;
     }
     try {
-      setLoading(true);
-      const res = await axios.get(`https://1456e82332dc.ngrok-free.app/api/search?q=${text}`);
+      setLoading(false);
+      const res = await axios.get(`https://1a4f66175ccc.ngrok-free.app/api/search?q=${text}`);
       const formatted = res.data.map(product => ({
         id: product.product_id,
         title: product.designtitle,
         price: "Tsh:" + product.price,
-        image: { uri: `https://1456e82332dc.ngrok-free.app/${product.productimagepath.replace(/\\/g, '/')}` }
+        image: { uri: `https://1a4f66175ccc.ngrok-free.app/${product.productimagepath.replace(/\\/g, '/')}` }
       }));
       setSearchResults(formatted);
     } catch (error) {
@@ -134,7 +150,14 @@ const handleDeleteOrder = (productId) => {
     setSearchQuery('');
     setSearchResults([]);
   };
-
+if(loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+  // Show All the Other Data if not loading
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -149,7 +172,7 @@ const handleDeleteOrder = (productId) => {
             onPress={() => navigation.navigate('ProfileScreen')}
           >
             <Image
-              source={require('../assets/profile-placeholder.png')}
+              source={{ uri: profileImage }}
               style={styles.profileImage}
             />
           </TouchableOpacity>
@@ -262,27 +285,36 @@ const handleDeleteOrder = (productId) => {
           ))}
         </ScrollView>
 
-        {/* Bottom Menu */}
-        <View style={styles.bottomMenu}>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('NewOrder')}
-          >
-            <Ionicons name="add-circle" size={20} color="#4a6bff" />
-            <Text style={styles.menuText}>New Order</Text>
-          </TouchableOpacity>
+       {/* Bottom Menu */}
+<View style={styles.bottomMenu}>
+  <TouchableOpacity
+    style={styles.menuItem}
+    onPress={() => navigation.navigate('Dashboard')}
+  >
+    <Ionicons name="home" size={20} color="#4a6bff" />
+    <Text style={styles.menuText}>Home</Text>
+  </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('DesignersScreen')}
-          >
-            <Ionicons name="people" size={20} color="#4a6bff" />
-            <Text style={styles.menuText}>Designers</Text>
-          </TouchableOpacity>
-        </View>
+  <TouchableOpacity
+    style={styles.menuItem}
+    onPress={() => navigation.navigate('NewOrder')}
+  >
+    <Ionicons name="add-circle" size={20} color="#4a6bff" />
+    <Text style={styles.menuText}>New Order</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    style={styles.menuItem}
+    onPress={() => navigation.navigate('DesignersScreen')}
+  >
+    <Ionicons name="people" size={20} color="#4a6bff" />
+    <Text style={styles.menuText}>Designers</Text>
+  </TouchableOpacity>
+</View>
       </View>
     </SafeAreaView>
   );
+  
 }
 
 const styles = StyleSheet.create({
@@ -474,5 +506,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4a6bff',
     marginTop: 4,
+  },
+   center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
