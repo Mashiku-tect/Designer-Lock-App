@@ -7,7 +7,7 @@ import {
   Alert
 } from 'react-native';
 import axios from 'axios';
-
+import BASE_URL from './Config';
 export default function LoginScreen({ navigation }) {
   const { login } = useContext(AuthContext);
   const [email, setEmail] = useState('');
@@ -16,7 +16,7 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     try {
-      const res = await axios.post('https://1a4f66175ccc.ngrok-free.app/api/login', {
+      const res = await axios.post(`${BASE_URL}/api/login`, {
         email,
         password,
       });

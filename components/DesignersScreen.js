@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import BASE_URL from './Config';
 
 const DesignersScreen = ({ navigation }) => {
-  const BASE_URL = "https://1a4f66175ccc.ngrok-free.app/";
+  //const BASE_URL = "https://d09d54f9f906.ngrok-free.app/";
   const [designers, setDesigners] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredDesigners, setFilteredDesigners] = useState([]);
@@ -18,7 +19,7 @@ const DesignersScreen = ({ navigation }) => {
     const fetchDesigners = async () => {
       try {
         const token = await AsyncStorage.getItem('userToken'); 
-     const response = await fetch(`${BASE_URL}api/designers`, {
+     const response = await fetch(`${BASE_URL}/api/designers`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -110,7 +111,7 @@ const DesignersScreen = ({ navigation }) => {
           filteredDesigners.map(designer => (
             <View key={designer.user_id} style={styles.designerCard}>
               <Image
-               source={{ uri: `https://1a4f66175ccc.ngrok-free.app/${designer.profileimage}` }}
+               source={{ uri: `${BASE_URL}/${designer.profileimage}` }}
 
                 style={styles.designerImage}
                 defaultSource={require('../assets/profile-placeholder.png')}

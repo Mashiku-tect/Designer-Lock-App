@@ -16,6 +16,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialIcons, Feather, Entypo } from '@expo/vector-icons';
 import axios from 'axios';
+import BASE_URL from './Config';
 
 const ProfileScreen = ({ navigation }) => {
   const { logout, userToken } = useContext(AuthContext); // Assuming you get token from context
@@ -30,13 +31,13 @@ const ProfileScreen = ({ navigation }) => {
   const [editValue, setEditValue] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
 
-  const BASE_URL = "https://1a4f66175ccc.ngrok-free.app";
+  //const BASE_URL = "https://d09d54f9f906.ngrok-free.app";
   // Fetch user data from backend on mount
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         setLoading(true);
-        const response = await axios.get('https://1a4f66175ccc.ngrok-free.app/api/profile', {
+        const response = await axios.get(`${BASE_URL}/api/profile`, {
           headers: {
             Authorization: `Bearer ${userToken}`,
           },
@@ -81,7 +82,7 @@ setProfileImage(fullImageUrl);
       });
 
       //upload the user profile image
-      const response = await axios.post('https://1a4f66175ccc.ngrok-free.app/api/profile/image', formData, {
+      const response = await axios.post(`${BASE_URL}/api/profile/image`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           Authorization: `Bearer ${userToken}`,
@@ -153,7 +154,7 @@ setProfileImage(fullImageUrl);
       setLoading(true);
       // Update user field API call
       const updatedData = { [editField]: editValue };
-      await axios.put('https://1a4f66175ccc.ngrok-free.app/api/updateprofile', updatedData, {
+      await axios.put(`${BASE_URL}/api/updateprofile`, updatedData, {
         headers: {
           Authorization: `Bearer ${userToken}`,
         },

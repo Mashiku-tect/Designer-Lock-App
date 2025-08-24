@@ -14,24 +14,39 @@ import ForgotPasswordScreen from './components/ForgotPasswordScreen';
 import DesignersScreen from './components/DesignersScreen';
 import ChatScreen from './components/ChatScreen';
 import ProductScreen from './components/ProductScreen';
-import ProfileScreen from './components/ProfileScreen'; // Ensure this path is correct
+import ProfileScreen from './components/ProfileScreen';
+import ResetPasswordScreen from './components/ResetPasswordScreen';
+import * as Linking from 'expo-linking';
 
 import { AuthProvider, AuthContext } from './AuthContext';
 
 const Stack = createStackNavigator();
 
-// AsyncStorage.clear().then(() => {
-//   console.log('Storage cleared!');
-// });
+// Linking config
+const linking = {
+  prefixes: ['myapp://'],
+  config: {
+    screens: {
+      ResetPassword: 'reset/:token', // e.g., myapp://reset/abc123
+      ForgotPassword: 'forgot',
+      Login: 'login',
+      Register: 'register',
+      // Add other screens if you want them accessible via deep link
+    },
+  },
+};
 
+// Auth stack
 const AuthStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Login" component={LoginScreen} />
     <Stack.Screen name="Register" component={RegisterScreen} />
     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
   </Stack.Navigator>
 );
 
+// App (protected) stack
 const AppStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Dashboard" component={DashboardScreen} />
@@ -43,6 +58,7 @@ const AppStack = () => (
   </Stack.Navigator>
 );
 
+// Root navigation
 const RootNavigation = () => {
   const { userToken, loading } = useContext(AuthContext);
 
@@ -54,18 +70,17 @@ const RootNavigation = () => {
     );
   }
 
-  return (
-    <NavigationContainer>
-      {userToken ? <AppStack /> : <AuthStack />}
-    </NavigationContainer>
-  );
+  return userToken ? <AppStack /> : <AuthStack />;
 };
 
+// App entry point
 export default function App() {
   return (
     <AuthProvider>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <RootNavigation />
+      <NavigationContainer linking={linking}>
+        <RootNavigation />
+      </NavigationContainer>
       <Toast />
     </AuthProvider>
   );

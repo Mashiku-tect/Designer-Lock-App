@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Alert,ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import BASE_URL from './Config';
 
 
 export default function DashboardScreen({ navigation }) {
@@ -48,7 +49,7 @@ export default function DashboardScreen({ navigation }) {
         return;
       }
       const res = await axios.get(
-        'https://1a4f66175ccc.ngrok-free.app/api/dashboard',
+        `${BASE_URL}/api/dashboard`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -57,7 +58,7 @@ export default function DashboardScreen({ navigation }) {
       );
       setDashboardData(res.data);
       setLoading(false);
-      setProfileImage(`https://1a4f66175ccc.ngrok-free.app/${res.data.profileimage.replace(/\\/g, '/')}`);
+      setProfileImage(`${BASE_URL}/${res.data.profileimage.replace(/\\/g, '/')}`);
 
       //console.log(res.data.profileimage);
         
@@ -89,7 +90,7 @@ const handleDeleteOrder = (productId) => {
             }
 
             const response = await axios.delete(
-              `https://1a4f66175ccc.ngrok-free.app/api/orders/${productId}`,
+              `${BASE_URL}/api/orders/${productId}`,
               {
                 headers: {
                   Authorization: `Bearer ${token}`,
@@ -131,12 +132,12 @@ const handleDeleteOrder = (productId) => {
     }
     try {
       setLoading(false);
-      const res = await axios.get(`https://1a4f66175ccc.ngrok-free.app/api/search?q=${text}`);
+      const res = await axios.get(`${BASE_URL}/api/search?q=${text}`);
       const formatted = res.data.map(product => ({
         id: product.product_id,
         title: product.designtitle,
         price: "Tsh:" + product.price,
-        image: { uri: `https://1a4f66175ccc.ngrok-free.app/${product.productimagepath.replace(/\\/g, '/')}` }
+        image: { uri: `${BASE_URL}/${product.productimagepath.replace(/\\/g, '/')}` }
       }));
       setSearchResults(formatted);
     } catch (error) {
@@ -258,8 +259,13 @@ if(loading) {
           </View>
           {/* end of duplicate views */}
 
-          <Text style={styles.sectionTitle}>Recent Orders</Text>
+          {dashboardData?.orders?.length > 0 && (
+              <Text style={styles.sectionTitle}>Recent Orders</Text>
+          )}
+
+        
           {dashboardData?.orders?.map(order => (
+            
            <TouchableOpacity key={order.product_id} style={styles.orderCard}>
   <View style={styles.orderInfo}>
     <Text style={styles.orderClient}>{order.clientname}</Text>

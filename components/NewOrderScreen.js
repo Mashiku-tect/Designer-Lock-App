@@ -6,6 +6,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image,
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import BASE_URL from './Config';
 
 
 
@@ -54,11 +55,10 @@ export default function NewOrderScreen({ navigation }) {
       });
     });
 
-    const response = await fetch('https://1a4f66175ccc.ngrok-free.app/api/orders', {
+    const response = await fetch(`${BASE_URL}/api/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'multipart/form-data',
-        // 👉 Add Authorization header
         'Authorization': `Bearer ${token}`,
       },
       body: formDataWithFiles,

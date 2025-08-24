@@ -1,5 +1,8 @@
 {
   "expo": {
+     "scheme": "myapp", // <-- this is your custom app scheme
+    "deepLinks": [],
+    "platforms": ["ios", "android", "web"],
     "name": "PayFirst",
     "slug": "PayFirst",
     "version": "1.0.0",

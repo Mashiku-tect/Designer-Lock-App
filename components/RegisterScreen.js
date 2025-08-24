@@ -1,8 +1,7 @@
-import React,{ useState } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
-import FlashMessage, { showMessage } from 'react-native-flash-message';
-
+import BASE_URL from './Config';
 import {
   View,
   Text,
@@ -12,50 +11,65 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+
+// Import phone number input
+import PhoneInput from 'react-native-phone-number-input';
 
 export default function RegisterScreen({ navigation }) {
   const [firstname, setFirstName] = useState('');
-const [lastname, setLastName] = useState('');
-const [email, setEmail] = useState('');
-const [phonenumber, setPhone] = useState('');
-const [password, setPassword] = useState('');
-const [confirmPassword, setConfirmPassword] = useState('');
+  const [lastname, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phonenumber, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false); 
 
-const handleRegister = async () => {
-  if (password !== confirmPassword) {
-    alert('Passwords do not match');
-    return;
-  }
+  const phoneInput = useRef(null);
 
-try {
-  const res = await axios.post('https://1a4f66175ccc.ngrok-free.app/api/register', {
-    firstname,
-    lastname,
-    email,
-    phonenumber,
-    password
-  });
+  const handleRegister = async () => {
+    if (password !== confirmPassword) {
+      Toast.show({ type: 'error', text2: 'Passwords do not match' });
+      return;
+    }
 
-  // Alert success message from server
-  //alert(res.data.message);
-   Toast.show({
-    type: 'success',
-    text2: res.data.message,
-  });
-  navigation.navigate('Login');
+    // ✅ Validate phone number
+    const isValid = phoneInput.current?.isValidNumber(phonenumber);
+    if (!isValid) {
+      Toast.show({ type: 'error', text2: 'Invalid phone number' });
+      return;
+    }
 
-} catch (error) {
- 
-    const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';
+    try {
+      setIsLoading(true); // 👈 start loading
+      const res = await axios.post(`${BASE_URL}/api/register`, {
+        firstname,
+        lastname,
+        email,
+        phonenumber,
+        password,
+      });
 
-  Toast.show({
-    type: 'error',
-    text2: errorMessage,
-  });
-}
+      Toast.show({
+        type: 'success',
+        text2: res.data.message,
+      });
+      navigation.navigate('Login');
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message ||
+        'Registration failed. Please try again.';
 
-};
+      Toast.show({
+        type: 'error',
+        text2: errorMessage,
+      });
+    }
+    finally {
+      setIsLoading(false); // 👈 stop loading (success or error)
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -77,16 +91,16 @@ try {
               style={styles.input}
               placeholder="First Name"
               placeholderTextColor="#999"
-                value={firstname}
+              value={firstname}
               onChangeText={setFirstName}
               autoCapitalize="words"
             />
 
-           <TextInput
+            <TextInput
               style={styles.input}
               placeholder="Last Name"
               placeholderTextColor="#999"
-                value={lastname}
+              value={lastname}
               onChangeText={setLastName}
               autoCapitalize="words"
             />
@@ -96,25 +110,32 @@ try {
               placeholder="Email Address"
               placeholderTextColor="#999"
               keyboardType="email-address"
-                value={email}
+              value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
             />
 
-            <TextInput
-              style={styles.input}
-              placeholder="Phone Number"
-              placeholderTextColor="#999"
-               value={phonenumber}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
+            {/* Phone number input */}
+            <PhoneInput
+              ref={phoneInput}
+              defaultValue={phonenumber}
+              defaultCode="TZ"   // 🇹🇿 Change to your default country
+              layout="first"
+              containerStyle={styles.phoneContainer}
+              textContainerStyle={styles.phoneTextContainer}
+              textInputProps={{
+                placeholderTextColor: '#999',
+              }}
+              onChangeFormattedText={(text) => {
+                setPhone(text);
+              }}
             />
 
             <TextInput
               style={styles.input}
               placeholder="Password"
               placeholderTextColor="#999"
-               value={password}
+              value={password}
               onChangeText={setPassword}
               secureTextEntry
             />
@@ -128,11 +149,17 @@ try {
               secureTextEntry
             />
 
+            {/* Register button */}
             <TouchableOpacity
-              style={styles.registerButton}
+              style={[styles.registerButton, isLoading && { opacity: 0.7 }]}
               onPress={handleRegister}
+              disabled={isLoading} // disable while loading
             >
-              <Text style={styles.registerButtonText}>Create Account</Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.registerButtonText}>Create Account</Text>
+              )}
             </TouchableOpacity>
 
             <View style={styles.termsContainer}>
@@ -146,13 +173,11 @@ try {
 
           {/* Footer */}
           <View style={styles.footer}>
-            
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
               <Text style={styles.footerLink}>Already Signed Up ? Sign In</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Spacer to avoid cutting off content */}
           <View style={{ height: 40 }} />
         </View>
       </ScrollView>
@@ -205,6 +230,21 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  phoneContainer: {
+    width: '100%',
+    height: 55,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 15,
+    backgroundColor: '#fff',
+    elevation: 2,
+  },
+  phoneTextContainer: {
+    paddingVertical: 0,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+  },
   registerButton: {
     backgroundColor: '#4a6bff',
     padding: 16,
@@ -243,10 +283,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginTop: 20,
     paddingHorizontal: 10,
-  },
-  footerText: {
-    color: '#666',
-    fontSize: 13,
   },
   footerLink: {
     color: '#4a6bff',

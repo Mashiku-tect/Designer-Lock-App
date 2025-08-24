@@ -1,8 +1,39 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image } from 'react-native';
-
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image,Alert,ActivityIndicator } from 'react-native';
+import BASE_URL from './Config';
 export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+
+   const handleSendResetLink = async () => {
+    if (!email) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${BASE_URL}/api/forgotpassword`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Navigate on success
+        Alert.alert('Success', data.message || 'Reset link sent to your email');
+        navigation.navigate('Login');
+      } else {
+        // Show error message from server
+        Alert.alert('Error', data.message || 'Something went wrong. Please try again.');
+      }
+    } catch (error) {
+      Alert.alert('Network Error', 'Unable to reach the server. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -35,12 +66,16 @@ export default function ForgotPasswordScreen({ navigation }) {
         />
 
         {/* Submit Button */}
-        <TouchableOpacity 
-          style={[styles.button, !email && styles.buttonDisabled]}
-          disabled={!email}
-          onPress={() => navigation.navigate('PasswordResetSent')}
+       <TouchableOpacity 
+          style={[styles.button, (!email || loading) && styles.buttonDisabled]}
+          disabled={!email || loading}
+          onPress={handleSendResetLink}
         >
-          <Text style={styles.buttonText}>Send Reset Link</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Send Reset Link</Text>
+          )}
         </TouchableOpacity>
 
         {/* Back to Login Link - Now with proper spacing */}

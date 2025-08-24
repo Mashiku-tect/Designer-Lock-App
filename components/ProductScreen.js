@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import BASE_URL from './Config';
 
 export default function ProductScreen({ route, navigation }) {
   const { product } = route.params || {};
@@ -33,7 +34,7 @@ export default function ProductScreen({ route, navigation }) {
         const token = await AsyncStorage.getItem('userToken');
         if (!token) return;
 
-        const response = await axios.post('https://1a4f66175ccc.ngrok-free.app/api/checkpayment',
+        const response = await axios.post(`${BASE_URL}/api/checkpayment`,
           {
             productId: product.id
           },
@@ -78,7 +79,7 @@ export default function ProductScreen({ route, navigation }) {
               }
 
               const response = await axios.post(
-                'https://1a4f66175ccc.ngrok-free.app/api/pay',
+                `${BASE_URL}/api/pay`,
                 {
                   productId: product.id,
                   amount: product.price.replace('Tsh:', ''),
