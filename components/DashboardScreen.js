@@ -8,6 +8,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Alert,ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
+
 import BASE_URL from './Config';
 
 
@@ -18,6 +20,7 @@ export default function DashboardScreen({ navigation }) {
   const [dashboardData, setDashboardData] = useState(null);
   const [refreshing, setRefreshing] = useState(false); // 🔁 Refresh state
   const [profileImage, setProfileImage] = useState(null);
+  
 
   const currentHour = new Date().getHours();
   let greeting;
@@ -99,14 +102,22 @@ const handleDeleteOrder = (productId) => {
             );
 
             if (response.data.message === 'Order deleted successfully') {
-              Alert.alert('Success', 'Order deleted successfully.');
+              //Alert.alert('Success', 'Order deleted successfully.');
+              Toast.show({
+                       type: 'success',
+                       text2: 'Order deleted successfully',
+                     });
             }
 
             // Refresh the dashboard
             await fetchDashboardData();
           } catch (error) {
-            console.error('Error deleting order:', error);
-            Alert.alert('Error', 'Failed to delete the order. Please try again.');
+            //console.error('Error deleting order:', error);
+            //Alert.alert('Error', 'Failed to delete the order. Please try again.');
+            Toast.show({
+                       type: 'error',
+                       text2: 'Failed to delete the order. Please try again',
+                     });
           }
         },
       },
@@ -124,6 +135,27 @@ const handleDeleteOrder = (productId) => {
     setRefreshing(false);
   }, []);
 
+  //handle edit of the order
+  // Add this function near your handleDeleteOrder function
+const handleEditOrder = (order) => {
+  //console.log("order", order);
+
+  if (order.status === 'Completed') {
+    Alert.alert(
+      'Action Not Allowed',
+      'Completed orders cannot be edited.'
+    );
+    return;
+  }
+
+  // Navigate to edit screen with order data
+  navigation.navigate('EditOrderScreen', { 
+    order: order,
+    onGoBack: fetchDashboardData // Refresh data when returning from edit
+  });
+};
+
+
   const handleSearch = async (text) => {
     setSearchQuery(text);
     if (text.trim() === '') {
@@ -134,10 +166,9 @@ const handleDeleteOrder = (productId) => {
       setLoading(false);
       const res = await axios.get(`${BASE_URL}/api/search?q=${text}`);
       const formatted = res.data.map(product => ({
-        id: product.product_id,
-        title: product.designtitle,
-        price: "Tsh:" + product.price,
-        image: { uri: `${BASE_URL}/${product.productimagepath.replace(/\\/g, '/')}` }
+        id: product.id,
+        
+        image: { uri: `${BASE_URL}/${product.path.replace(/\\/g, '/')}` }
       }));
       setSearchResults(formatted);
     } catch (error) {
@@ -198,33 +229,37 @@ if(loading) {
           </TouchableOpacity>
         </View>
 
-        {/* Search Results */}
-        {searchQuery.trim() !== '' && (
-          <View style={styles.searchResultsContainer}>
-            <Text style={styles.sectionTitle}>Search Results</Text>
-            {searchResults.length > 0 ? (
-              <FlatList
-                horizontal
-                data={searchResults}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.productCard}
-                    onPress={() => navigation.navigate('Product', { product: item })}
-                  >
-                    <Image source={item.image} style={styles.productImage} />
-                    <Text style={styles.productTitle}>{item.title}</Text>
-                    <Text style={styles.productPrice}>{item.price}</Text>
-                  </TouchableOpacity>
-                )}
-                contentContainerStyle={styles.searchResultsList}
-                showsHorizontalScrollIndicator={false}
-              />
-            ) : (
-              <Text style={styles.noResultsText}>No results found.</Text>
-            )}
-          </View>
+       {/* Search Results */}
+{searchQuery.trim() !== '' && (
+  <View style={styles.searchResultsContainer}>
+    <Text style={styles.sectionTitle}>Search Results</Text>
+    {searchResults.length > 0 ? (
+      <FlatList
+        data={searchResults}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // 🔥 grid layout
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.productCard}
+            onPress={() => navigation.navigate('Product', { 
+    products: searchResults,   // all results
+  orderReference: searchResults[0].id
+  })}
+          >
+            <Image source={item.image} style={styles.productImage} />
+            <Text style={styles.productTitle}>{item.title || `ID: ${item.id}`}</Text>
+            <Text style={styles.productPrice}>{item.price || 'Preview Only'}</Text>
+          </TouchableOpacity>
         )}
+        contentContainerStyle={styles.gridList}
+        showsVerticalScrollIndicator={false}
+      />
+    ) : (
+      <Text style={styles.noResultsText}>No results found.</Text>
+    )}
+  </View>
+)}
+
 
         {/* Stats & Orders */}
         <ScrollView
@@ -264,31 +299,44 @@ if(loading) {
           )}
 
         
-          {dashboardData?.orders?.map(order => (
-            
-           <TouchableOpacity key={order.product_id} style={styles.orderCard}>
-  <View style={styles.orderInfo}>
-    <Text style={styles.orderClient}>{order.clientname}</Text>
-    <Text style={styles.orderDate}>{new Date(order.createdAt).toLocaleString()}</Text>
-  </View>
+          {/* In the order card section */}
+{dashboardData?.orders?.map(order => (
+  <TouchableOpacity key={order.product_id} style={styles.orderCard}>
+    <View style={styles.orderInfo}>
+      <Text style={styles.orderClient}>{order.clientname}</Text>
+      <Text style={styles.orderDate}>{new Date(order.createdAt).toLocaleString()}</Text>
+    </View>
 
-  <View style={styles.orderMeta}>
-    <Text style={[
-      styles.orderStatus,
-      { color: order.status === 'Completed' ? '#2ecc71' : '#f39c12' }
-    ]}>
-      {order.status}
-    </Text>
-    <Text style={styles.orderAmount}>Tsh: {order.price}</Text>
+    <View style={styles.orderMeta}>
+      <Text style={[
+        styles.orderStatus,
+        { color: order.status === 'Completed' ? '#2ecc71' : '#f39c12' }
+      ]}>
+        {order.status}
+      </Text>
+      <Text style={styles.orderAmount}>Tsh: {order.price}</Text>
 
-    {/* Delete Button */}
-    <TouchableOpacity onPress={() => handleDeleteOrder(order.product_id)}>
-      <Ionicons name="trash" size={20} color="#e74c3c" style={{ marginTop: 10 }} />
-    </TouchableOpacity>
-  </View>
-</TouchableOpacity>
+      {/* Action Buttons Container */}
+      <View style={styles.orderActions}>
+        {/* Edit Button */}
+        <TouchableOpacity 
+          onPress={() => handleEditOrder(order)}
+          style={styles.editButton}
+        >
+          <Ionicons name="pencil" size={18} color="#3498db" />
+        </TouchableOpacity>
 
-          ))}
+        {/* Delete Button */}
+        <TouchableOpacity 
+          onPress={() => handleDeleteOrder(order.product_id)}
+          style={styles.deleteButton}
+        >
+          <Ionicons name="trash" size={18} color="#e74c3c" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  </TouchableOpacity>
+))}
         </ScrollView>
 
        {/* Bottom Menu */}
@@ -309,13 +357,13 @@ if(loading) {
     <Text style={styles.menuText}>New Order</Text>
   </TouchableOpacity>
 
-  <TouchableOpacity
+  {/* <TouchableOpacity
     style={styles.menuItem}
     onPress={() => navigation.navigate('DesignersScreen')}
   >
     <Ionicons name="people" size={20} color="#4a6bff" />
     <Text style={styles.menuText}>Designers</Text>
-  </TouchableOpacity>
+  </TouchableOpacity> */}
 </View>
       </View>
     </SafeAreaView>
@@ -404,23 +452,23 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   productCard: {
-    width: 150,
-    marginRight: 15,
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
+  flex: 1,
+  margin: 8,
+  backgroundColor: 'white',
+  borderRadius: 10,
+  padding: 10,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 2,
+},
   productImage: {
-    width: '100%',
-    height: 120,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
+  width: '100%',
+  height: 150,
+  borderRadius: 8,
+  marginBottom: 8,
+},
   productTitle: {
     fontSize: 14,
     fontWeight: '600',
@@ -517,5 +565,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  gridList: {
+  paddingBottom: 20,
+},
+orderActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+    gap: 15, // Space between buttons
+  },
+  editButton: {
+    padding: 5,
+  },
+  
+  deleteButton: {
+    padding: 5,
   },
 });

@@ -1,383 +1,683 @@
 import React, { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, Alert, SafeAreaView, StatusBar, Modal, TextInput } from 'react-native';
 import axios from 'axios';
-import {
-  View,
-  Text,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  ImageBackground,
-  Modal,
-  Platform,
-  Alert,
-  PermissionsAndroid,
-  ActivityIndicator
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import BASE_URL from './Config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ActivityIndicator } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 
-export default function ProductScreen({ route, navigation }) {
-  const { product } = route.params || {};
-  const [isFullScreen, setIsFullScreen] = useState(false);
+const { width, height } = Dimensions.get('window');
+
+const ProductScreen = ({ route, navigation }) => {
+  const { products = [], orderReference } = route.params || {};
   const [isPaid, setIsPaid] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [price, setPrice] = useState(null);
+  const [productid, setProductId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [phoneModalVisible, setPhoneModalVisible] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
 
+  // Fetch product price on components mount
   useEffect(() => {
-    const checkPaymentStatus = async () => {
+    const fetchPrice = async () => {
       try {
-        const token = await AsyncStorage.getItem('userToken');
-        if (!token) return;
-
-        const response = await axios.post(`${BASE_URL}/api/checkpayment`,
-          {
-            productId: product.id
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (response.data.hasPaid) {
-          setIsPaid(true);
-          //setLoading(false);
-        }
-      } catch (err) {
-        console.error('Error checking payment status:', err);
+        setLoading(true);
+        const response = await axios.get(`${BASE_URL}/api/price/${orderReference}`);
+        setPrice(response.data.price);
+        setProductId(response.data.productid);
+      } catch (error) {
+        console.error('Failed to fetch price:', error);
+      } finally {
+        setLoading(false);
       }
-      finally {
-      setLoading(false); // ✅ Always stop spinner after the request
-    }
     };
 
-    checkPaymentStatus();
-  }, []);
+    fetchPrice();
+  }, [orderReference]);
 
-  const handlePayment = () => {
-    Alert.alert(
-      'Confirm Payment',
-      `Are you sure you want to pay ${product.price}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Pay',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('userToken');
-
-              if (!token) {
-                Alert.alert('Authentication Error', 'User token not found.');
-                return;
-              }
-
-              const response = await axios.post(
-                `${BASE_URL}/api/pay`,
-                {
-                  productId: product.id,
-                  amount: product.price.replace('Tsh:', ''),
-                },
-                {
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                }
-              );
-
-              if (response.data.success) {
-                setIsPaid(true);
-                Alert.alert('Success', 'Payment successful. You can now download your image.');
-              } else {
-                Alert.alert('Payment Failed', 'Something went wrong. Please try again.');
-              }
-            } catch (error) {
-              console.error('Payment error:', error);
-              Alert.alert('Error', 'Could not complete payment.');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const downloadImage = async () => {
-    if (downloading) return;
-    
-    setDownloading(true);
-    
-    try {
-      // First we need to get the image URI
-      const localUri = Image.resolveAssetSource(product.image).uri;
-      
-      // For Android, we need to request permissions
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-          {
-            title: "Storage Permission",
-            message: "App needs access to storage to save images",
-            buttonNeutral: "Ask Me Later",
-            buttonNegative: "Cancel",
-            buttonPositive: "OK"
-          }
-        );
-        
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert("Permission denied", "Cannot save image without storage permission");
+  // Fetch payment status 
+  useEffect(() => {
+    const FetchPaymentStatus = async () => {
+      try {
+        if (!productid) return;
+        setLoading(true);
+        const token = await AsyncStorage.getItem("userToken");
+        if (!token) {
+          console.log("No token found");
           return;
         }
+        const response = await axios.post(`${BASE_URL}/api/checkpayment`, 
+          { productid },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        );
+        if (response.data.hasPaid) {
+          setIsPaid(true);
+        }
+      } catch (error) {
+        if (error.response?.data?.error) {
+          Alert.alert("Error", error.response.data.error);
+        } else {
+          console.error("Error checking payment:", error);
+        }
+      } finally {
+        setLoading(false);
       }
-      
-      // Check if we have media library permissions
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert("Permission denied", "Cannot save image without media library permission");
-        return;
-      }
-      
-      // Create a filename
-      const filename = localUri.split('/').pop();
-      const fileExt = filename.split('.').pop();
-      const newFilename = `${product.title.replace(/\s+/g, '_')}_${Date.now()}.${fileExt}`;
-      
-      // Download the file
-      const downloadResumable = FileSystem.createDownloadResumable(
-        localUri,
-        FileSystem.documentDirectory + newFilename
+    };
+
+    FetchPaymentStatus();
+  }, [productid]);
+
+  // Fetch Images By Product ID
+  const fetchImagesByProductId = async () => {
+    const token = await AsyncStorage.getItem("userToken");
+    if (!token) {
+      console.log("No token");
+      return [];
+    }
+    try {
+      const response = await axios.get(
+        `${BASE_URL}/api/images/${productid}`, 
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
       );
-      
-      const { uri } = await downloadResumable.downloadAsync();
-      
-      // Save to media library
-      const asset = await MediaLibrary.createAssetAsync(uri);
-      await MediaLibrary.createAlbumAsync('Downloads', asset, false);
-      
-      Alert.alert("Success", "Image saved to your gallery!");
-    
-    
-    } catch (error) {
-      console.error('Download error:', error);
-      Alert.alert("Error", "Failed to download image. Please try again.");
-    } finally {
-      setDownloading(false);
+      return response.data.images || [];
+    } catch (err) {
+      console.error("Error fetching image list:", err);
+      return [];
     }
   };
 
-  const WatermarkOverlay = ({ large = false }) => (
-    <View style={[styles.watermarkContainer, large && styles.largeWatermark]}>
-      <Text style={[styles.watermarkText, large && styles.largeWatermarkText]}>SAMPLE</Text>
-      <Text style={[styles.watermarkText, large && styles.largeWatermarkText]}>UNPAID</Text>
+  // Show phone number modal before payment
+  const initiatePayment = () => {
+    setPhoneModalVisible(true);
+  };
+
+  // Handle payment for ALL images
+  const handlePayment = async () => {
+    if (!phoneNumber.trim()) {
+      Alert.alert('Error', 'Please enter your phone number');
+      return;
+    }
+    
+    setPhoneModalVisible(false);
+    setIsProcessing(true);
+    
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      if (!token) {
+        console.log("No token");
+        return;
+      }
+      const response = await axios.post(`${BASE_URL}/api/pay`, {
+        productid,
+        amount: price,
+        phoneNumber: phoneNumber.trim()
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (response.data.success) {
+        //setIsPaid(true);
+        Alert.alert('Your Payment is Processed please hang on a while....');
+      } else {
+        Alert.alert('Payment Failed', 'Please try again.');
+      }
+    }  catch (err) {
+  console.error('Payment request failed');
+
+  if (err.response) {
+    // The request was made and the server responded with a non-2xx status
+    console.error('Response data:', err.response.data);
+    console.error('Response status:', err.response.status);
+    console.error('Response headers:', err.response.headers);
+
+    Alert.alert(
+      'Payment Error',
+      err.response.data.message || 'Server responded with an error'
+    );
+  } else if (err.request) {
+    // The request was made but no response was received
+    console.error('No response received:', err.request);
+
+    Alert.alert(
+      'Network Error',
+      'No response from server. Check your internet connection.'
+    );
+  } else {
+    // Something else happened in setting up the request
+    console.error('Error Message:', err.message);
+
+    Alert.alert('Error', err.message);
+  }
+
+  console.error('Full Error:', err);
+}
+ finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (!isPaid) {
+      Alert.alert('Payment Required', 'You need to complete payment first.');
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Permission to access storage is required to download images');
+        return;
+      }
+
+      const images = await fetchImagesByProductId();
+      if (images.length === 0) {
+        Alert.alert('No images', 'No images found for this product');
+        return;
+      }
+
+      for (let img of images) {
+        try {
+          const fileName = img.title ? img.title : `image_${img.id}`;
+          const image_url = `${BASE_URL}/${img.path}`;
+          const extension = image_url.split('.').pop().split('?')[0]; 
+          const safeFileName = `${fileName}.${extension}`;
+
+          const fileUri = FileSystem.documentDirectory + safeFileName;
+          const downloadResult = await FileSystem.downloadAsync(image_url, fileUri);
+          const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+
+          const album = await MediaLibrary.getAlbumAsync("Downloads");
+          if (album == null) {
+            await MediaLibrary.createAlbumAsync("Downloads", asset, false);
+          } else {
+            await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+          }
+        } catch (singleError) {
+          console.error("Failed to download/save image:", singleError);
+        }
+      }
+
+      Alert.alert('Download Complete', 'All images have been downloaded successfully.');
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Download Error', 'Could not download images. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Render each image with watermark overlay
+  const renderItem = ({ item }) => (
+    <View style={styles.imageWrapper}>
+      <Image
+        source={{ uri: item.image.uri }}
+        style={styles.image}
+        resizeMode="cover"
+      />
+      
+      {!isPaid && (
+        <View style={styles.watermarkContainer}>
+          <View style={styles.watermark}>
+            <Ionicons name="lock-closed" size={24} color="#fff" />
+            <Text style={styles.watermarkText}>PREVIEW</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 
-  if(loading){
-     return (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#0000ff" />
-          </View>
-        );
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
   }
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#4a6bff" />
+          <Ionicons name="chevron-back" size={28} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Design Preview</Text>
-        <TouchableOpacity>
-          <Ionicons name="ellipsis-vertical" size={24} color="#333" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Products</Text>
+        <View style={styles.placeholder} />
       </View>
 
-      <Modal
-        visible={isFullScreen}
-        transparent={false}
-        animationType="fade"
-        onRequestClose={() => setIsFullScreen(false)}
-      >
-        <SafeAreaView style={styles.fullScreenContainer}>
-          <TouchableOpacity
-            style={styles.fullScreenBackButton}
-            onPress={() => setIsFullScreen(false)}
-          >
-            <Ionicons name="close" size={30} color="white" />
-          </TouchableOpacity>
+      {/* Image Carousel */}
+      <View style={styles.carouselContainer}>
+        <FlatList
+          data={products}
+          renderItem={renderItem}
+          horizontal
+          pagingEnabled
+          keyExtractor={(item, index) => index.toString()}
+          showsHorizontalScrollIndicator={false}
+          onScroll={e => {
+            const index = Math.round(e.nativeEvent.contentOffset.x / width);
+            setCurrentIndex(index);
+          }}
+        />
+        
+        {/* Image counter */}
+        <View style={styles.imageCounter}>
+          <Text style={styles.counterText}>{currentIndex + 1}/{products.length}</Text>
+        </View>
 
-          {isPaid ? (
-            <Image
-              source={product.image}
-              style={styles.fullScreenImage}
-              resizeMode="contain"
+        {/* Pagination dots */}
+        <View style={styles.dots}>
+          {products.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.dot,
+                currentIndex === index && styles.activeDot
+              ]}
             />
-          ) : (
-            <ImageBackground
-              source={product.image}
-              style={styles.fullScreenImage}
-              resizeMode="contain"
-            >
-              <WatermarkOverlay large />
-            </ImageBackground>
-          )}
-        </SafeAreaView>
-      </Modal>
+          ))}
+        </View>
+      </View>
 
-      <TouchableOpacity
-        style={styles.imageContainer}
-        onPress={() => setIsFullScreen(true)}
-        activeOpacity={0.9}
-      >
-        {isPaid ? (
-          <Image source={product.image} style={styles.productImage} />
-        ) : (
-          <ImageBackground source={product.image} style={styles.productImage}>
-            <WatermarkOverlay />
-          </ImageBackground>
-        )}
-      </TouchableOpacity>
+      {/* Product Info */}
+      <View style={styles.infoContainer}>
+        <Text style={styles.productTitle}>Product Collection</Text>
+        <Text style={styles.productDescription}>
+          {products.length} high-quality images available for download after purchase
+        </Text>
+        
+        <View style={styles.priceContainer}>
+          <Text style={styles.priceLabel}>Total Price:</Text>
+          <Text style={styles.price}>{price}</Text>
+        </View>
+        
+        {/* Processing charges message */}
+        <View style={styles.chargesNote}>
+          <Ionicons name="information-circle" size={16} color="#666" />
+          <Text style={styles.chargesText}>Processing charges will be added</Text>
+        </View>
+      </View>
 
-      <View style={styles.productInfo}>
-        <Text style={styles.title}>{product.title}</Text>
-        <Text style={styles.price}>{product.price}</Text>
-
+      {/* Action Button */}
+      <View style={styles.actionContainer}>
         {!isPaid ? (
-          <TouchableOpacity style={styles.purchaseButton} onPress={handlePayment}>
-            <Text style={styles.purchaseButtonText}>Pay to Remove Watermark</Text>
+          <TouchableOpacity 
+            style={[styles.payButton, isProcessing && styles.disabledButton]} 
+            onPress={initiatePayment}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <View style={styles.loadingContainer}>
+                <Ionicons name="refresh" size={20} color="#fff" style={styles.spinning} />
+                <Text style={styles.payButtonText}>Processing...</Text>
+              </View>
+            ) : (
+              <View style={styles.buttonContent}>
+                <Ionicons name="lock-open" size={20} color="#fff" />
+                <Text style={styles.payButtonText}>Unlock All Images</Text>
+              </View>
+            )}
           </TouchableOpacity>
         ) : (
           <TouchableOpacity 
-            style={[styles.purchaseButton, downloading && styles.disabledButton]} 
-            onPress={downloadImage}
-            disabled={downloading}
+            style={[styles.downloadButton, isProcessing && styles.disabledButton]} 
+            onPress={handleDownloadAll}
+            disabled={isProcessing}
           >
-            <Text style={styles.purchaseButtonText}>
-              {downloading ? 'Downloading...' : 'Download'}
-            </Text>
+            {isProcessing ? (
+              <View style={styles.loadingContainer}>
+                <Ionicons name="refresh" size={20} color="#fff" style={styles.spinning} />
+                <Text style={styles.downloadButtonText}>Preparing Downloads...</Text>
+              </View>
+            ) : (
+              <View style={styles.buttonContent}>
+                <Ionicons name="download" size={20} color="#fff" />
+                <Text style={styles.downloadButtonText}>Download All</Text>
+              </View>
+            )}
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Phone Number Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={phoneModalVisible}
+        onRequestClose={() => setPhoneModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Enter Your Phone Number</Text>
+            <Text style={styles.modalSubtitle}>We need your phone number to process the payment</Text>
+            
+            <TextInput
+              style={styles.phoneInput}
+              placeholder="e.g., 0712345678"
+              keyboardType="phone-pad"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              autoFocus={true}
+            />
+            
+            <Text style={styles.chargesNoteModal}>
+              <Ionicons name="information-circle" size={16} color="#666" />
+              Processing charges will be added to your payment
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setPhoneModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handlePayment}
+              >
+                <Text style={styles.confirmButtonText}>Pay Now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
-}
+};
+
+export default ProductScreen;
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-    paddingHorizontal: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eaeaea',
+    backgroundColor: '#fff',
   },
   backButton: {
-    marginTop: Platform.OS === 'android' ? 10 : 0,
+    padding: 4,
   },
-  imageContainer: {
-    marginTop: 10,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  placeholder: {
+    width: 36,
+  },
+  carouselContainer: {
+    height: height * 0.45,
+    position: 'relative',
+  },
+  imageWrapper: {
+    width,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.9,
+  },
+  watermarkContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  watermark: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
     borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  watermarkText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    margin: 4,
+  },
+  activeDot: {
+    backgroundColor: '#fff',
+    width: 20,
+  },
+  imageCounter: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  counterText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  infoContainer: {
+    padding: 20,
+    backgroundColor: '#fff',
+    marginTop: 8,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  productTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  productDescription: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  priceLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  price: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2ecc71',
+  },
+  chargesNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+  },
+  chargesText: {
+    marginLeft: 6,
+    fontSize: 14,
+    color: '#666',
+  },
+  actionContainer: {
+    padding: 20,
+    backgroundColor: '#fff',
+  },
+  payButton: {
+    backgroundColor: '#3498db',
+    padding: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+    shadowColor: '#3498db',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 5,
   },
-  productImage: {
-    width: '100%',
-    height: 300,
-    justifyContent: 'center',
+  downloadButton: {
+    backgroundColor: '#2ecc71',
+    padding: 18,
+    borderRadius: 14,
     alignItems: 'center',
-  },
-  fullScreenContainer: {
-    flex: 1,
-    backgroundColor: 'black',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullScreenBackButton: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 40 : 20,
-    left: 20,
-    zIndex: 10,
-  },
-  fullScreenImage: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  watermarkContainer: {
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    padding: 20,
-    borderRadius: 10,
-    transform: [{ rotate: '-30deg' }],
-  },
-  largeWatermark: {
-    padding: 40,
-    transform: [{ rotate: '-30deg' }, { scale: 1.5 }],
-  },
-  watermarkText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  largeWatermarkText: {
-    fontSize: 48,
-  },
-  productInfo: {
-    marginTop: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4a6bff',
-    marginBottom: 20,
-  },
-  purchaseButton: {
-    backgroundColor: '#4a6bff',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
+    shadowColor: '#2ecc71',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   disabledButton: {
-    backgroundColor: '#cccccc',
+    opacity: 0.7,
   },
-  purchaseButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  header: {
+  buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
+    gap: 8,
   },
-  headerTitle: {
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  spinning: {
+    transform: [{ rotate: '0deg' }],
+  },
+  payButtonText: {
+    color: '#fff',
     fontSize: 18,
     fontWeight: '600',
-    color: '#4a6bff',
-    textAlign: 'center',
-    flex: 1,
-    marginLeft: -24,
   },
-   center: {
+  downloadButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  // Modal styles
+  modalContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  phoneInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  chargesNoteModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: '#e0e0e0',
+  },
+  confirmButton: {
+    backgroundColor: '#3498db',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

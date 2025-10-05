@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
-
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import BASE_URL from './Config';
-
-
+import Toast from 'react-native-toast-message';
 
 export default function NewOrderScreen({ navigation }) {
   const [formData, setFormData] = useState({
@@ -16,68 +14,104 @@ export default function NewOrderScreen({ navigation }) {
     contactNumber: '',
     designTitle: '',
     price: '',
-    notes: '',
+  
   });
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [productId, setProductId] = useState(null); // New state for product ID
 
   const handleSubmit = async () => {
-  if (isSubmitting) return;
+    if (isSubmitting) return;
 
-  if (!formData.clientName || !formData.designTitle || !formData.price) {
-    Alert.alert('Required Fields', 'Please fill in all required fields');
-    return;
-  }
-
-  setIsSubmitting(true);
-
-  try {
-    // 🔐 Get the token from AsyncStorage
-    const token = await AsyncStorage.getItem('userToken');
-    if (!token) {
-      Alert.alert('Unauthorized', 'You must be logged in to create an order.');
-      setIsSubmitting(false);
+    if (!formData.clientName || !formData.designTitle || !formData.price) {
+     // Alert.alert('Required Fields', 'Please fill in all required fields');
+     Toast.show({
+         type: 'error',
+         text2: 'Please fill in all required fields',
+       });
       return;
     }
 
-    const formDataWithFiles = new FormData();
-    formDataWithFiles.append('clientname', formData.clientName);
-    formDataWithFiles.append('clientphonenumber', formData.contactNumber);
-    formDataWithFiles.append('designtitle', formData.designTitle);
-    formDataWithFiles.append('price', formData.price);
-    formDataWithFiles.append('additionalnotes', formData.notes);
-
-    uploadedFiles.forEach((file) => {
-      formDataWithFiles.append(`files`, {
-        uri: file.uri,
-        type: file.mimeType || file.type || 'image/jpeg',
-        name: file.name || file.fileName || file.uri.split('/').pop(),
-      });
-    });
-
-    const response = await fetch(`${BASE_URL}/api/orders`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: formDataWithFiles,
-    });
-
-    const data = await response.json();
-    if (response.ok) {
-      Alert.alert('Success', `Order created successfully! Product ID: ${data.productId}`);
-      navigation.goBack();
-    } else {
-      Alert.alert('Error', `Failed to create order: ${data.message || 'Unknown error'}`);
+    if(formData.price<500){
+      Toast.show({
+         type: 'info',
+         text2: 'Price Must Be At least 500',
+       });
+       return;
     }
-  } catch (error) {
-    console.error('Error submitting order:', error);
-    Alert.alert('Error', 'An error occurred. Please try again.');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+
+    setIsSubmitting(true);
+
+    try {
+      // 🔐 Get the token from AsyncStorage
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        //Alert.alert('Unauthorized', 'You must be logged in to create an order.');
+        Toast.show({
+         type: 'error',
+         text2: 'You must be logged in to create an order',
+       });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const formDataWithFiles = new FormData();
+      formDataWithFiles.append('clientname', formData.clientName);
+      formDataWithFiles.append('clientphonenumber', formData.contactNumber);
+      formDataWithFiles.append('designtitle', formData.designTitle);
+      formDataWithFiles.append('price', formData.price);
+    
+
+      uploadedFiles.forEach((file) => {
+        formDataWithFiles.append(`files`, {
+          uri: file.uri,
+          type: file.mimeType || file.type || 'image/jpeg',
+          name: file.name || file.fileName || file.uri.split('/').pop(),
+        });
+      });
+
+      const response = await fetch(`${BASE_URL}/api/orders/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formDataWithFiles,
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setProductId(data.productId); // Store the product ID
+        
+      } else {
+       // Alert.alert('Error', `Failed to create order: ${data.message || 'Unknown error'}`);
+        Toast.show({
+         type: 'error',
+         text2: `Failed to create order: ${data.message}`,
+       });
+      }
+    } catch (error) {
+      //console.error('Error submitting order:', error);
+      //Alert.alert('Error', 'An error occurred. Please try again.');
+      Toast.show({
+         type: 'error',
+         text2: 'An error occurred. Please try again',
+       });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    if (productId) {
+      await Clipboard.setStringAsync(productId);
+      //Alert.alert('Copied!', 'Product ID has been copied to clipboard');
+      Toast.show({
+               type: 'success',
+               text2: 'Product ID has been copied to clipboard',
+             });
+    }
+  };
 
   const handleUpload = async () => {
     try {
@@ -98,7 +132,11 @@ export default function NewOrderScreen({ navigation }) {
       } else {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permissionResult.granted) {
-          Alert.alert('Permission required', 'We need access to your photos to upload files');
+         // Alert.alert('Permission required', 'We need access to your photos to upload files');
+         Toast.show({
+                  type: 'info',
+                  text2: 'Permission required We need access to your photos to upload files'
+                });
           return;
         }
 
@@ -117,8 +155,12 @@ export default function NewOrderScreen({ navigation }) {
         }
       }
     } catch (error) {
-      console.error('Error uploading files:', error);
-      Alert.alert('Error', 'Error uploading files. Please try again.');
+      //console.error('Error uploading files:', error);
+      //Alert.alert('Error', 'Error uploading files. Please try again.');
+      Toast.show({
+               type: 'error',
+               text2: 'Error uploading files. Please try again',
+             });
     }
   };
 
@@ -126,19 +168,31 @@ export default function NewOrderScreen({ navigation }) {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleBack = () => {
+    if (productId) {
+      // If we have a product ID, clear it and stay on the page
+      setProductId(null);
+    } else {
+      // Otherwise, navigate back
+      navigation.goBack();
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
-          onPress={() => navigation.goBack()} 
+          onPress={handleBack}
           style={styles.headerIcon}
           hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
         >
           <Ionicons name="arrow-back" size={24} color="#4a6bff" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>New Designing Order</Text>
+          <Text style={styles.headerTitle}>
+            {productId ? 'Order Created' : 'New Designing Order'}
+          </Text>
         </View>
         <View style={styles.headerIcon} />
       </View>
@@ -147,140 +201,186 @@ export default function NewOrderScreen({ navigation }) {
         contentContainerStyle={styles.formContainer}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Form Section */}
-        <View style={styles.formSection}>
-          <Text style={styles.sectionLabel}>Client Information</Text>
-          
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Client Name *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="John Doe"
-              placeholderTextColor="#999"
-              value={formData.clientName}
-              onChangeText={(text) => setFormData({...formData, clientName: text})}
-              returnKeyType="next"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Contact Number</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="+255 123 456 789"
-              placeholderTextColor="#999"
-              keyboardType="phone-pad"
-              value={formData.contactNumber}
-              onChangeText={(text) => setFormData({...formData, contactNumber: text})}
-              returnKeyType="next"
-            />
-          </View>
-        </View>
-
-        {/* Design Details Section */}
-        <View style={styles.formSection}>
-          <Text style={styles.sectionLabel}>Design Details</Text>
-          
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Design Title *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Business Card Design"
-              placeholderTextColor="#999"
-              value={formData.designTitle}
-              onChangeText={(text) => setFormData({...formData, designTitle: text})}
-              returnKeyType="next"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Price (TZS) *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="50,000"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              value={formData.price}
-              onChangeText={(text) => setFormData({...formData, price: text})}
-              returnKeyType="next"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Additional Notes</Text>
-            <TextInput
-              style={[styles.input, styles.multilineInput]}
-              placeholder="Any special requirements..."
-              placeholderTextColor="#999"
-              multiline
-              value={formData.notes}
-              onChangeText={(text) => setFormData({...formData, notes: text})}
-            />
-          </View>
-        </View>
-
-        {/* Upload Section */}
-        <View style={styles.formSection}>
-          <Text style={styles.sectionLabel}>Design Files</Text>
-          
-          <TouchableOpacity 
-            style={styles.uploadButton}
-            onPress={handleUpload}
-            activeOpacity={0.7}
-          >
-            <View style={styles.uploadButtonContent}>
-              <Ionicons name="cloud-upload" size={28} color="#4a6bff" />
-              <Text style={styles.uploadButtonText}>Upload Design Files</Text>
-              <Text style={styles.uploadSubtext}>PNG or JPG only (max 10 files)</Text>
+        {productId ? (
+          // Show product ID after successful creation
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Order Created Successfully!</Text>
+            
+            <View style={styles.successMessage}>
+              <Ionicons name="checkmark-circle" size={48} color="#4CAF50" />
+              <Text style={styles.successText}>
+                Your order has been created successfully. Please save the Product ID for future reference.
+              </Text>
             </View>
-          </TouchableOpacity>
 
-          {/* Display uploaded files */}
-          {uploadedFiles.length > 0 && (
-            <View style={styles.uploadedFilesContainer}>
-              {uploadedFiles.map((file, index) => (
-                <View key={`file-${index}`} style={styles.fileItem}>
-                  <Ionicons name="document" size={20} color="#4a6bff" />
-                  <Text 
-                    style={styles.fileName}
-                    numberOfLines={1}
-                    ellipsizeMode="middle"
-                  >
-                    {file.name || file.fileName || file.uri.split('/').pop()}
-                  </Text>
-                  <TouchableOpacity 
-                    onPress={() => removeFile(index)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#ff4a4a" />
-                  </TouchableOpacity>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Product ID</Text>
+              <View style={styles.productIdContainer}>
+                <TextInput
+                  style={styles.productIdInput}
+                  value={productId}
+                  editable={false}
+                  selectTextOnFocus={true}
+                />
+                <TouchableOpacity 
+                  style={styles.copyButton}
+                  onPress={copyToClipboard}
+                >
+                  <Ionicons name="copy" size={20} color="#4a6bff" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.helperText}>
+                Tap the copy icon to copy this ID to your clipboard
+              </Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.doneButton}
+              onPress={() => navigation.navigate('Dashboard')}
+            >
+              <Text style={styles.doneButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          // Original form content
+          <>
+            {/* Form Section */}
+            <View style={styles.formSection}>
+              <Text style={styles.sectionLabel}>Client Information</Text>
+              
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Client Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="John Doe"
+                  placeholderTextColor="#999"
+                  value={formData.clientName}
+                  onChangeText={(text) => setFormData({...formData, clientName: text})}
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Contact Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="+255 123 456 789"
+                  placeholderTextColor="#999"
+                  keyboardType="phone-pad"
+                  value={formData.contactNumber}
+                  onChangeText={(text) => setFormData({...formData, contactNumber: text})}
+                  returnKeyType="next"
+                />
+              </View>
+            </View>
+
+            {/* Design Details Section */}
+            <View style={styles.formSection}>
+              <Text style={styles.sectionLabel}>Design Details</Text>
+              
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Design Title *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Business Card Design"
+                  placeholderTextColor="#999"
+                  value={formData.designTitle}
+                  onChangeText={(text) => setFormData({...formData, designTitle: text})}
+                  returnKeyType="next"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Price (TZS) *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="50,000"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                  value={formData.price}
+                  onChangeText={(text) => setFormData({...formData, price: text})}
+                  returnKeyType="next"
+                />
+              </View>
+
+             
+            </View>
+
+            {/* Upload Section */}
+            <View style={styles.formSection}>
+              <Text style={styles.sectionLabel}>Design Files</Text>
+              
+              <TouchableOpacity 
+                style={styles.uploadButton}
+                onPress={handleUpload}
+                activeOpacity={0.7}
+              >
+                <View style={styles.uploadButtonContent}>
+                  <Ionicons name="cloud-upload" size={28} color="#4a6bff" />
+                  <Text style={styles.uploadButtonText}>Upload Design Files</Text>
+                  <Text style={styles.uploadSubtext}>PNG or JPG only (max 10 files)</Text>
                 </View>
-              ))}
+              </TouchableOpacity>
+
+              {/* Display uploaded files */}
+              {uploadedFiles.length > 0 && (
+                <View style={styles.uploadedFilesContainer}>
+                  {uploadedFiles.map((file, index) => (
+                    <View key={`file-${index}`} style={styles.fileItem}>
+                      <Ionicons name="document" size={20} color="#4a6bff" />
+                      <Text 
+                        style={styles.fileName}
+                        numberOfLines={1}
+                        ellipsizeMode="middle"
+                      >
+                        {file.name || file.fileName || file.uri.split('/').pop()}
+                      </Text>
+                      <TouchableOpacity 
+                        onPress={() => removeFile(index)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="close-circle" size={20} color="#ff4a4a" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
-          )}
-        </View>
+          </>
+        )}
       </ScrollView>
 
-      {/* Submit Button */}
-      <View style={styles.footer}>
-        <TouchableOpacity 
-          style={[
-            styles.submitButton,
-            (!formData.clientName || !formData.designTitle || !formData.price) && styles.disabledButton
-          ]}
-          onPress={handleSubmit}
-          disabled={!formData.clientName || !formData.designTitle || !formData.price || isSubmitting}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.submitButtonText}>
-            {isSubmitting ? 'Creating...' : 'Create Order'}
-          </Text>
-          <Ionicons name="checkmark-circle" size={22} color="white" />
-        </TouchableOpacity>
-      </View>
-      {/* end of submit button */}
+      {/* Submit Button - Only show when not showing product ID */}
+      {!productId && (
+        <View style={styles.footer}>
+          <TouchableOpacity 
+  style={[
+    styles.submitButton,
+    (
+      !formData.clientName || 
+      !formData.designTitle || 
+      !formData.price || 
+      uploadedFiles.length === 0 // ✅ Require at least 1 file
+    ) && styles.disabledButton
+  ]}
+  onPress={handleSubmit}
+  disabled={
+    !formData.clientName || 
+    !formData.designTitle || 
+    !formData.price || 
+    uploadedFiles.length === 0 || // ✅ Require at least 1 file
+    isSubmitting
+  }
+  activeOpacity={0.7}
+>
+  <Text style={styles.submitButtonText}>
+    {isSubmitting ? 'Creating...' : 'Create Order'}
+  </Text>
+  <Ionicons name="checkmark-circle" size={22} color="white" />
+</TouchableOpacity>
 
-      {/* end of bottom menu */}
+        </View>
+      )}
     </View>
   );
 }
@@ -434,5 +534,56 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginRight: 10,
+  },
+  // New styles for product ID display
+  successMessage: {
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 10,
+  },
+  successText: {
+    textAlign: 'center',
+    marginTop: 10,
+    color: '#555',
+    lineHeight: 20,
+  },
+  productIdContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+    overflow: 'hidden',
+  },
+  productIdInput: {
+    flex: 1,
+    padding: 15,
+    fontSize: 16,
+    color: '#333',
+  },
+  copyButton: {
+    padding: 15,
+    backgroundColor: '#f0f0f0',
+    borderLeftWidth: 1,
+    borderLeftColor: '#e1e1e1',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 5,
+    marginLeft: 5,
+  },
+  doneButton: {
+    backgroundColor: '#4a6bff',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  doneButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

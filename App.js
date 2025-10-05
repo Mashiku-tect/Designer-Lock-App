@@ -16,6 +16,8 @@ import ChatScreen from './components/ChatScreen';
 import ProductScreen from './components/ProductScreen';
 import ProfileScreen from './components/ProfileScreen';
 import ResetPasswordScreen from './components/ResetPasswordScreen';
+import InboxScreen from './components/InboxScreen';
+import EditOrderScreen from './components/EditOrderScreen';
 import * as Linking from 'expo-linking';
 
 import { AuthProvider, AuthContext } from './AuthContext';
@@ -55,6 +57,9 @@ const AppStack = () => (
     <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     <Stack.Screen name="ChatScreen" component={ChatScreen} />
     <Stack.Screen name="Product" component={ProductScreen} />
+     <Stack.Screen name="Inbox" component={InboxScreen} />
+      <Stack.Screen name="EditOrderScreen" component={EditOrderScreen} />
+    
   </Stack.Navigator>
 );
 

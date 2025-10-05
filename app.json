@@ -1,8 +1,12 @@
 {
   "expo": {
-     "scheme": "myapp", // <-- this is your custom app scheme
+    "scheme": "myapp",
     "deepLinks": [],
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "name": "PayFirst",
     "slug": "PayFirst",
     "version": "1.0.0",
@@ -33,6 +37,9 @@
       "eas": {
         "projectId": "f85be193-8f92-4577-b366-4f1dbf5731af"
       }
-    }
+    },
+    "plugins": [
+      "expo-video"
+    ]
   }
 }

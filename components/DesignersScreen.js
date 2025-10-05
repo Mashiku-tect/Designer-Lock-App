@@ -84,14 +84,15 @@ const DesignersScreen = ({ navigation }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color="#4a6bff" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Available Designers</Text>
-        </View>
-        <View style={styles.headerButton} />
-      </View>
+  <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+    <Ionicons name="chevron-back" size={24} color="#4a6bff" />
+  </TouchableOpacity>
+  <View style={styles.headerTitleContainer}>
+    <Text style={styles.headerTitle}>Available Designers</Text>
+  </View>
+  
+</View>
+
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -137,6 +138,15 @@ const DesignersScreen = ({ navigation }) => {
           </View>
         )}
       </ScrollView>
+
+            {/* Floating Inbox Button */}
+      <TouchableOpacity 
+        onPress={() => navigation.navigate('Inbox')} 
+        style={styles.floatingInboxButton}
+      >
+        <Ionicons name="mail" size={24} color="white" />
+      </TouchableOpacity>
+
     </View>
   );
 };
@@ -153,6 +163,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
+    marginTop:25,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -264,6 +275,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     marginTop: 5,
+  },
+  floatingInboxButton: {
+    position: 'absolute',
+    bottom: 35,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#4a6bff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
 
