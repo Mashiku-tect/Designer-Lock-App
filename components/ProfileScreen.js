@@ -14,25 +14,27 @@ import {
   Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons, MaterialIcons, Feather, Entypo } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather, Entypo, AntDesign } from '@expo/vector-icons';
 import axios from 'axios';
 import BASE_URL from './Config';
 
 const ProfileScreen = ({ navigation }) => {
-  const { logout, userToken } = useContext(AuthContext); // Assuming you get token from context
+  const { logout, userToken } = useContext(AuthContext);
 
-  const [user, setUser] = useState(null);  // null until fetched
+  const [user, setUser] = useState(null);
   const [profileImage, setProfileImage] = useState(null);
-  const [loading, setLoading] = useState(true);  // loading user data initially
-  const [uploading, setUploading] = useState(false); // for image upload spinner
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editField, setEditField] = useState(null);
   const [editValue, setEditValue] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
 
-  //const BASE_URL = "https://d09d54f9f906.ngrok-free.app";
-  // Fetch user data from backend on mount
+  // New states for skills and expertise
+  const [newSkill, setNewSkill] = useState('');
+  const [skills, setSkills] = useState([]);
+  
   useEffect(() => {
     const fetchUserData = async () => {
       try {
@@ -43,16 +45,22 @@ const ProfileScreen = ({ navigation }) => {
           },
         });
         setUser(response.data);
-      const data = response.data;
-//setUser(data);
-
-const fullImageUrl = data.profileimage
-  ? `${BASE_URL}/${data.profileimage.replace(/^\/+/, '')}`
-  : 'https://randomuser.me/api/portraits/men/1.jpg';
-
-setProfileImage(fullImageUrl);
+        //console.log('User data fetched:', response.data);
         
-// console.log(response.data);
+        // Initialize skills and expertise from user data if available
+        if (response.data.skills) {
+          setSkills(response.data.skills);
+        }
+        if (response.data.expertise) {
+          setExpertise(response.data.expertise);
+        }
+
+        const data = response.data;
+        const fullImageUrl = data.profileimage
+          ? `${BASE_URL}/${data.profileimage.replace(/^\/+/, '')}`
+          : 'https://randomuser.me/api/portraits/men/1.jpg';
+
+        setProfileImage(fullImageUrl);
       } catch (error) {
         Alert.alert('Error', 'Failed to load user data');
         console.error(error);
@@ -70,7 +78,6 @@ setProfileImage(fullImageUrl);
       setUploading(true);
       const formData = new FormData();
 
-      // Extract filename and type from URI
       const filename = imageUri.split('/').pop();
       let match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : `image`;
@@ -81,7 +88,6 @@ setProfileImage(fullImageUrl);
         type,
       });
 
-      //upload the user profile image
       const response = await axios.post(`${BASE_URL}/api/profile/image`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -89,11 +95,8 @@ setProfileImage(fullImageUrl);
         },
       });
 
-      // Assume response returns the new profile image URL
       setProfileImage(response.data.profileImageUrl);
-      // Update user state with new profile image URL if needed
       setUser((prev) => ({ ...prev, profileImage: response.data.profileImageUrl }));
-
       Alert.alert('Success', 'Profile image updated successfully');
     } catch (error) {
       Alert.alert('Error', 'Failed to upload profile image');
@@ -115,7 +118,7 @@ setProfileImage(fullImageUrl);
 
     if (!result.canceled) {
       const selectedUri = result.assets[0].uri;
-      setProfileImage(selectedUri); // optimistic UI update
+      setProfileImage(selectedUri);
       await uploadImage(selectedUri);
     }
   };
@@ -136,7 +139,7 @@ setProfileImage(fullImageUrl);
 
     if (!result.canceled) {
       const capturedUri = result.assets[0].uri;
-      setProfileImage(capturedUri); // optimistic UI update
+      setProfileImage(capturedUri);
       await uploadImage(capturedUri);
     }
   };
@@ -144,7 +147,7 @@ setProfileImage(fullImageUrl);
   // Start editing a field
   const startEditing = (field, value) => {
     setEditField(field);
-    setEditValue(value);
+    setEditValue(value || '');
     setIsEditing(true);
   };
 
@@ -152,7 +155,6 @@ setProfileImage(fullImageUrl);
   const saveEdit = async () => {
     try {
       setLoading(true);
-      // Update user field API call
       const updatedData = { [editField]: editValue };
       await axios.put(`${BASE_URL}/api/updateprofile`, updatedData, {
         headers: {
@@ -170,6 +172,49 @@ setProfileImage(fullImageUrl);
       setLoading(false);
     }
   };
+
+  // Add a new skill
+  const addSkill = async () => {
+    if (newSkill.trim() === '') return;
+    
+    try {
+     //const updatedSkills = [...skills, newSkill.trim()];
+      const response=await axios.put(`${BASE_URL}/api/updateprofile/addskill`, { skills: newSkill }, {
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+        },
+      });
+       const updatedSkills = response.data.skills || [];
+      setSkills(updatedSkills);
+      setNewSkill('');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add skill');
+      console.error(error);
+    }
+  };
+
+  // Delete a skill
+  const deleteSkill = async (index) => {
+    try {
+     //const updatedSkills = skills.filter((_, i) => i !== index);
+      await axios.delete(`${BASE_URL}/api/updateprofile/deleteskill/${index}`, { }, {
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+        },
+      });
+      const updatedSkills = skills.filter((s) => s.id !== index);
+    setSkills(updatedSkills);
+      //setSkills(updatedSkills);
+      //fetchUserData();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete skill');
+      console.error(error);
+    }
+  };
+
+ 
+
+
 
   if (loading) {
     return (
@@ -201,7 +246,7 @@ setProfileImage(fullImageUrl);
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Profile Image Section */}
         <View style={styles.profileImageContainer}>
-          {(uploading) ? (
+          {uploading ? (
             <ActivityIndicator size="large" color="#4a6bff" />
           ) : (
             <Image source={{ uri: profileImage }} style={styles.profileImage} />
@@ -216,19 +261,8 @@ setProfileImage(fullImageUrl);
 
         {/* Name and Username */}
         <View style={styles.nameContainer}>
-          <Text style={styles.name}>{user.firstname+" "+user.lastname}</Text>
-          {/* <Text style={styles.username}>{user.username}</Text> */}
+          <Text style={styles.name}>{user.firstname + " " + user.lastname}</Text>
         </View>
-
-        {/* Bio */}
-        <TouchableOpacity 
-          style={styles.section}
-          onPress={() => startEditing('bio', user.bio)}
-        >
-          <Text style={styles.sectionTitle}>Bio</Text>
-          <Text style={styles.bioText}>{user.bio}</Text>
-          <Feather name="edit-2" size={18} color="#888" style={styles.editIcon} />
-        </TouchableOpacity>
 
         {/* Stats */}
         <View style={styles.statsContainer}>
@@ -245,6 +279,106 @@ setProfileImage(fullImageUrl);
             <Text style={styles.statLabel}>Following</Text>
           </View>
         </View>
+
+        {/* Bio */}
+        <TouchableOpacity 
+          style={styles.section}
+          onPress={() => startEditing('bio', user.bio)}
+        >
+          <Text style={styles.sectionTitle}>Bio</Text>
+          <Text style={styles.bioText}>{user.bio || 'Add a bio...'}</Text>
+          <Feather name="edit-2" size={18} color="#888" style={styles.editIcon} />
+        </TouchableOpacity>
+
+        {/* Work Section */}
+        <TouchableOpacity 
+          style={styles.section}
+          onPress={() => startEditing('work', user.work)}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Work</Text>
+            <Feather name="edit-2" size={18} color="#888" />
+          </View>
+          {user.work ? (
+            <Text style={styles.infoText}>{user.work}</Text>
+          ) : (
+            <Text style={styles.placeholderText}>Add where you work...</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Professional Summary Section */}
+        <TouchableOpacity 
+          style={styles.section}
+          onPress={() => startEditing('professionalsummary', user.professionalsummary)}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Professional Summary</Text>
+            <Feather name="edit-2" size={18} color="#888" />
+          </View>
+          {user.professionalsummary ? (
+            <Text style={styles.infoText}>{user.professionalsummary}</Text>
+          ) : (
+            <Text style={styles.placeholderText}>Add Your Professional Summary</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Education Section */}
+        <TouchableOpacity 
+          style={styles.section}
+          onPress={() => startEditing('education', user.education)}
+        >
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Education</Text>
+            <Feather name="edit-2" size={18} color="#888" />
+          </View>
+          {user.education ? (
+            <Text style={styles.infoText}>{user.education}</Text>
+          ) : (
+            <Text style={styles.placeholderText}>Add your education level...</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Skills Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Skills/Expertise</Text>
+          </View>
+          
+          {/* Add Skill Input */}
+          <View style={styles.addItemContainer}>
+            <TextInput
+              style={styles.addItemInput}
+              placeholder="Add a skill or expertise"
+              value={newSkill}
+              onChangeText={setNewSkill}
+            />
+            <TouchableOpacity style={styles.addItemButton} onPress={addSkill}>
+              <Ionicons name="add" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+{/* Skills List */}
+{skills.length > 0 ? (
+  <View style={styles.itemsList}>
+    {skills.map((skill) => (
+      <View key={skill.id} style={styles.itemChip}>
+        <Text style={styles.itemChipText}>{skill.skill}</Text>
+        <TouchableOpacity 
+          style={styles.deleteItemButton}
+          onPress={() => deleteSkill(skill.id)}
+        >
+          <Ionicons name="close" size={16} color="#fff" />
+        </TouchableOpacity>
+      </View>
+    ))}
+  </View>
+) : (
+  <Text style={styles.placeholderText}>No skills/expertise added yet</Text>
+)}
+
+        </View>
+
+        
+        
 
         {/* Personal Info */}
         <View style={styles.section}>
@@ -272,32 +406,6 @@ setProfileImage(fullImageUrl);
           />
         </View>
 
-        {/* Social Links */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Social Links</Text>
-          
-          <InfoItem 
-            icon="globe" 
-            label="Website" 
-            value={user.website} 
-            onPress={() => startEditing('website', user.website)}
-          />
-          
-          <InfoItem 
-            icon="instagram" 
-            label="Instagram" 
-            value={user.instagram} 
-            onPress={() => startEditing('instagram', user.instagram)}
-          />
-          
-          <InfoItem 
-            icon="twitter" 
-            label="X" 
-            value={user.x} 
-            onPress={() => startEditing('twitter', user.x)}
-          />
-        </View>
-
         {/* Account Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
@@ -305,13 +413,13 @@ setProfileImage(fullImageUrl);
           <ActionButton 
             icon="settings" 
             label="Settings" 
-            onPress={() => navigation.navigate('Settings')}
+            //onPress={() => navigation.navigate('Settings')}
           />
           
           <ActionButton 
             icon="help-circle" 
             label="Help & Support" 
-            onPress={() => navigation.navigate('Help')}
+            //onPress={() => navigation.navigate('Help')}
           />
           
           <ActionButton 
@@ -386,16 +494,6 @@ setProfileImage(fullImageUrl);
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.imageOption}
-              onPress={() => {
-                setProfileImage('https://randomuser.me/api/portraits/men/1.jpg');
-                setModalVisible(false);
-              }}
-            >
-              
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
               style={[styles.imageOption, styles.imageOptionCancel]}
               onPress={() => setModalVisible(false)}
             >
@@ -438,7 +536,6 @@ const ActionButton = ({ icon, label, onPress, isLast }) => (
 );
 
 const styles = StyleSheet.create({
-  // ... your existing styles here, unchanged ...
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -454,7 +551,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    marginTop:0
+    marginTop: 0
   },
   headerTitle: {
     fontSize: 18,
@@ -494,10 +591,6 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 5,
   },
-  username: {
-    fontSize: 16,
-    color: '#888',
-  },
   section: {
     backgroundColor: 'white',
     padding: 15,
@@ -510,21 +603,85 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 15,
   },
   bioText: {
     fontSize: 14,
     color: '#555',
     lineHeight: 20,
   },
+  infoText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  placeholderText: {
+    fontSize: 14,
+    color: '#888',
+    fontStyle: 'italic',
+  },
   editIcon: {
     position: 'absolute',
     right: 15,
     top: 15,
+  },
+  // Skills and Expertise Styles
+  addItemContainer: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  addItemInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    marginRight: 10,
+  },
+  addItemButton: {
+    backgroundColor: '#4a6bff',
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  itemChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e9ecef',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  itemChipText: {
+    fontSize: 14,
+    color: '#333',
+    marginRight: 6,
+  },
+  deleteItemButton: {
+    backgroundColor: '#ff4444',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -607,10 +764,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    textAlign: 'center',
   },
- modalInput: {
+  modalInput: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
@@ -650,7 +806,6 @@ const styles = StyleSheet.create({
   imageOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: '',
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -659,24 +814,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 15,
     color: '#333',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageOptionTextDelete: {
-    fontSize: 16,
-    marginLeft: 15,
-    color: '#ff4444',
   },
   imageOptionCancel: {
     justifyContent: 'center',
     alignItems: 'center',
+    borderBottomWidth: 0,
   },
   imageOptionTextCancel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#4a6bff',
   },
-   center: {
+  center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",

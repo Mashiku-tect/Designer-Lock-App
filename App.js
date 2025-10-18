@@ -11,7 +11,7 @@ import RegisterScreen from './components/RegisterScreen';
 import DashboardScreen from './components/DashboardScreen';
 import NewOrderScreen from './components/NewOrderScreen';
 import ForgotPasswordScreen from './components/ForgotPasswordScreen';
-import DesignersScreen from './components/DesignersScreen';
+import FeedScreen from './components/FeedsScreen';
 import ChatScreen from './components/ChatScreen';
 import ProductScreen from './components/ProductScreen';
 import ProfileScreen from './components/ProfileScreen';
@@ -19,6 +19,8 @@ import ResetPasswordScreen from './components/ResetPasswordScreen';
 import InboxScreen from './components/InboxScreen';
 import EditOrderScreen from './components/EditOrderScreen';
 import * as Linking from 'expo-linking';
+import FeedProfileScreen from './components/FeedProfileScreen';
+import VideoUploadScreen from './components/VideoScreen';
 
 import { AuthProvider, AuthContext } from './AuthContext';
 
@@ -53,7 +55,9 @@ const AppStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Dashboard" component={DashboardScreen} />
     <Stack.Screen name="NewOrder" component={NewOrderScreen} />
-    <Stack.Screen name="DesignersScreen" component={DesignersScreen} />
+    <Stack.Screen name="FeedScreen" component={FeedScreen} />
+    <Stack.Screen name="VideoUploadScreen" component={VideoUploadScreen} />
+    <Stack.Screen name="FeedProfileScreen" component={FeedProfileScreen} />
     <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
     <Stack.Screen name="ChatScreen" component={ChatScreen} />
     <Stack.Screen name="Product" component={ProductScreen} />

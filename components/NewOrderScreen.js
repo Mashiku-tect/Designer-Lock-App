@@ -32,10 +32,10 @@ export default function NewOrderScreen({ navigation }) {
       return;
     }
 
-    if(formData.price<500){
+    if(formData.price<1000){
       Toast.show({
          type: 'info',
-         text2: 'Price Must Be At least 500',
+         text2: 'Price Must Be At least 1000',
        });
        return;
     }

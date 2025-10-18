@@ -247,7 +247,7 @@ if(loading) {
   })}
           >
             <Image source={item.image} style={styles.productImage} />
-            <Text style={styles.productTitle}>{item.title || `ID: ${item.id}`}</Text>
+           
             <Text style={styles.productPrice}>{item.price || 'Preview Only'}</Text>
           </TouchableOpacity>
         )}
@@ -357,13 +357,23 @@ if(loading) {
     <Text style={styles.menuText}>New Order</Text>
   </TouchableOpacity>
 
-  {/* <TouchableOpacity
+  <TouchableOpacity
     style={styles.menuItem}
-    onPress={() => navigation.navigate('DesignersScreen')}
+    onPress={() => navigation.navigate('FeedScreen')}
   >
     <Ionicons name="people" size={20} color="#4a6bff" />
-    <Text style={styles.menuText}>Designers</Text>
-  </TouchableOpacity> */}
+    <Text style={styles.menuText}>Discover</Text>
+  </TouchableOpacity>
+
+  {/*Video Uploads*/ }
+  <TouchableOpacity
+  style={styles.menuItem}
+  onPress={() => navigation.navigate('VideoUploadScreen')}
+>
+  <Ionicons name="videocam" size={20} color="#4a6bff" />
+  <Text style={styles.menuText}>Video</Text>
+</TouchableOpacity>
+
 </View>
       </View>
     </SafeAreaView>
