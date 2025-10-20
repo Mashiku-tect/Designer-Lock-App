@@ -117,53 +117,66 @@ export default function EditOrderScreen({ route, navigation }) {
     }
   };
 
-  const handleUpload = async () => {
-    try {
-      let result;
-      if (Platform.OS === 'web') {
-        result = await DocumentPicker.getDocumentAsync({
-          type: ['image/png', 'image/jpeg'],
-          copyToCacheDirectory: false,
-          multiple: true,
-        });
-        
-        if (result.type === 'success' && result.assets) {
-          const validFiles = result.assets.filter(file => 
-            file.mimeType === 'image/png' || file.mimeType === 'image/jpeg'
-          );
-          setUploadedFiles(prev => [...prev, ...validFiles]);
-        }
-      } else {
-        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permissionResult.granted) {
-          Toast.show({
-            type: 'info',
-            text2: 'Permission required We need access to your photos to upload files'
-          });
-          return;
-        }
-
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false,
-          allowsMultipleSelection: true,
-          quality: 1,
-        });
-        
-        if (!result.canceled && result.assets) {
-          const validFiles = result.assets.filter(asset => 
-            asset.uri.endsWith('.png') || asset.uri.endsWith('.jpg') || asset.uri.endsWith('.jpeg')
-          );
-          setUploadedFiles(prev => [...prev, ...validFiles]);
-        }
-      }
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text2: 'Error uploading files. Please try again',
+const handleUpload = async () => {
+  try {
+    let result;
+    if (Platform.OS === 'web') {
+      // Web: allow both image and video files
+      result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'video/*'],
+        copyToCacheDirectory: false,
+        multiple: true,
       });
+
+      if (result.type === 'success' && result.assets) {
+        const validFiles = result.assets.filter(
+          file =>
+            file.mimeType.startsWith('image/') ||
+            file.mimeType.startsWith('video/')
+        );
+        setUploadedFiles(prev => [...prev, ...validFiles]);
+      }
+    } else {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Toast.show({
+          type: 'info',
+          text2: 'We need access to your media library to upload files.',
+        });
+        return;
+      }
+
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All, // ✅ allow both images and videos
+        allowsEditing: false,
+        allowsMultipleSelection: true,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets) {
+        const validFiles = result.assets.filter(asset => {
+          const isImage =
+            asset.uri.endsWith('.png') ||
+            asset.uri.endsWith('.jpg') ||
+            asset.uri.endsWith('.jpeg');
+          const isVideo =
+            asset.uri.endsWith('.mp4') ||
+            asset.uri.endsWith('.mov') ||
+            asset.uri.endsWith('.avi');
+          return isImage || isVideo;
+        });
+        setUploadedFiles(prev => [...prev, ...validFiles]);
+      }
     }
-  };
+  } catch (error) {
+    console.error(error);
+    Toast.show({
+      type: 'error',
+      text2: 'Error uploading files. Please try again',
+    });
+  }
+};
+
 
   const removeFile = (index, isExisting = false) => {
     if (isExisting) {
@@ -174,34 +187,43 @@ export default function EditOrderScreen({ route, navigation }) {
     }
   };
 
-  const renderFileItem = (file, index, isExisting = false) => {
-    const fileName = isExisting 
-      ? file.filename || file.path?.split('/').pop() 
-      : file.name || file.fileName || file.uri.split('/').pop();
-    
-    const fileUri = isExisting 
-      ? { uri: `${BASE_URL}/${file.path?.replace(/\\/g, '/')}` }
-      : { uri: file.uri };
+ const renderFileItem = (file, index, isExisting = false) => {
+  const fileName = isExisting
+    ? file.filename || file.path?.split('/').pop()
+    : file.name || file.fileName || file.uri.split('/').pop();
 
-    return (
-      <View key={`file-${index}-${isExisting ? 'existing' : 'new'}`} style={styles.fileItem}>
-        <Ionicons name="document" size={20} color="#4a6bff" />
-        <Text 
-          style={styles.fileName}
-          numberOfLines={1}
-          ellipsizeMode="middle"
-        >
-          {fileName}
-        </Text>
-        <TouchableOpacity 
-          onPress={() => removeFile(index, isExisting)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="close-circle" size={20} color="#ff4a4a" />
-        </TouchableOpacity>
-      </View>
-    );
-  };
+  const fileUri = isExisting
+    ? { uri: `${BASE_URL}/${file.path?.replace(/\\/g, '/')}` }
+    : { uri: file.uri };
+
+  const isVideo =
+    fileUri.uri?.endsWith('.mp4') ||
+    fileUri.uri?.endsWith('.mov') ||
+    fileUri.uri?.endsWith('.avi');
+
+  return (
+    <View
+      key={`file-${index}-${isExisting ? 'existing' : 'new'}`}
+      style={styles.fileItem}
+    >
+      <Ionicons
+        name={isVideo ? 'videocam' : 'image'}
+        size={20}
+        color={isVideo ? '#ff9500' : '#4a6bff'}
+      />
+      <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
+        {fileName}
+      </Text>
+      <TouchableOpacity
+        onPress={() => removeFile(index, isExisting)}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons name="close-circle" size={20} color="#ff4a4a" />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 
   return (
     <View style={styles.container}>
@@ -305,7 +327,7 @@ export default function EditOrderScreen({ route, navigation }) {
             <View style={styles.uploadButtonContent}>
               <Ionicons name="cloud-upload" size={28} color="#4a6bff" />
               <Text style={styles.uploadButtonText}>Upload Additional Files</Text>
-              <Text style={styles.uploadSubtext}>PNG or JPG only (max 10 files)</Text>
+              <Text style={styles.uploadSubtext}>PNG,JPG or MP4 only (max 10 files)</Text>
             </View>
           </TouchableOpacity>
 

@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Alert,ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
+import { Video } from 'expo-av';
 
 import BASE_URL from './Config';
 
@@ -167,10 +168,12 @@ const handleEditOrder = (order) => {
       const res = await axios.get(`${BASE_URL}/api/search?q=${text}`);
       const formatted = res.data.map(product => ({
         id: product.id,
+        fileType:product.fileType,
         
         image: { uri: `${BASE_URL}/${product.path.replace(/\\/g, '/')}` }
       }));
       setSearchResults(formatted);
+      //console.log("Formatted Search Result",formatted);
     } catch (error) {
       console.error('Search error:', error);
     } finally {
@@ -228,29 +231,56 @@ if(loading) {
             <Ionicons name="search" size={20} color="white" />
           </TouchableOpacity>
         </View>
-
-       {/* Search Results */}
+{/* Search Results */}
 {searchQuery.trim() !== '' && (
   <View style={styles.searchResultsContainer}>
     <Text style={styles.sectionTitle}>Search Results</Text>
+
     {searchResults.length > 0 ? (
       <FlatList
         data={searchResults}
         keyExtractor={(item) => item.id.toString()}
         numColumns={2} // 🔥 grid layout
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.productCard}
-            onPress={() => navigation.navigate('Product', { 
-    products: searchResults,   // all results
-  orderReference: searchResults[0].id
-  })}
-          >
-            <Image source={item.image} style={styles.productImage} />
-           
-            <Text style={styles.productPrice}>{item.price || 'Preview Only'}</Text>
-          </TouchableOpacity>
-        )}
+
+        renderItem={({ item }) => {
+          const isVideo =
+            item.fileType === 'video' ||
+            (item.image.uri && item.image.uri.match(/\.(mp4|mov|mkv)$/i));
+
+          return (
+            <TouchableOpacity
+              style={styles.productCard}
+              onPress={() =>
+                navigation.navigate('Product', {
+                  products: searchResults, // all results
+                  orderReference: item.id, // use clicked product
+                })
+              }
+            >
+              {/* ✅ Conditionally render image or video */}
+              {isVideo ? (
+                <Video
+                  source={{ uri: item.image.uri?.startsWith('http') ? item.image.uri : `${item.image.uri}` }}
+                  style={styles.productMedia}
+                  resizeMode="cover"
+                  shouldPlay={false}
+                  useNativeControls={false}
+                  isLooping
+                />
+              ) : (
+                <Image
+                  source={{ uri: item.image.uri?.startsWith('http') ? item.image.uri : `${item.image.uri}` }}
+                  style={styles.productMedia}
+                  resizeMode="cover"
+                />
+              )}
+
+              <Text style={styles.productPrice}>
+                {item.price || 'Preview Only'}
+              </Text>
+            </TouchableOpacity>
+          );
+        }}
         contentContainerStyle={styles.gridList}
         showsVerticalScrollIndicator={false}
       />
@@ -341,13 +371,13 @@ if(loading) {
 
        {/* Bottom Menu */}
 <View style={styles.bottomMenu}>
-  <TouchableOpacity
+  {/* <TouchableOpacity
     style={styles.menuItem}
     onPress={() => navigation.navigate('Dashboard')}
   >
     <Ionicons name="home" size={20} color="#4a6bff" />
     <Text style={styles.menuText}>Home</Text>
-  </TouchableOpacity>
+  </TouchableOpacity> */}
 
   <TouchableOpacity
     style={styles.menuItem}
@@ -365,14 +395,7 @@ if(loading) {
     <Text style={styles.menuText}>Discover</Text>
   </TouchableOpacity>
 
-  {/*Video Uploads*/ }
-  <TouchableOpacity
-  style={styles.menuItem}
-  onPress={() => navigation.navigate('VideoUploadScreen')}
->
-  <Ionicons name="videocam" size={20} color="#4a6bff" />
-  <Text style={styles.menuText}>Video</Text>
-</TouchableOpacity>
+ 
 
 </View>
       </View>
@@ -396,7 +419,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 1,
     marginBottom: 25,
   },
   greeting: {
@@ -592,4 +615,11 @@ orderActions: {
   deleteButton: {
     padding: 5,
   },
+  productMedia: {
+  width: '100%',
+  height: 150,
+  borderRadius: 10,
+ // looks nice for videos
+},
+
 });

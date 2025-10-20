@@ -1,4 +1,4 @@
-import React, { useState, useRef,useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,14 +18,15 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Video } from 'expo-av'; // Import Video component
 import BASE_URL from './Config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const DesignerProfileScreen = ({ route, navigation }) => {
   const { designer } = route.params;
-  //console.log('Designer data:', designer);
   const [activeTab, setActiveTab] = useState('works');
   const [selectedPost, setSelectedPost] = useState(null);
   const [postModalVisible, setPostModalVisible] = useState(false);
@@ -36,11 +37,14 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   const [likedPosts, setLikedPosts] = useState({});
   const verticalFlatListRef = useRef(null);
   const [designerWorks, setDesignerWorks] = useState([]);
-  
+  const videoRefs = useRef({}); // To manage video references
+  const [visiblePosts, setVisiblePosts] = useState(new Set()); // Track visible posts in modal
+  const [visibleGridItems, setVisibleGridItems] = useState(new Set()); // Track visible grid items
+  const [designerStats, setDesignerStats] = useState({});
+  const [isFollowing, setIsFollowing] = useState(false);
 
   // Function to open WhatsApp
   const openWhatsApp = () => {
-    const phoneNumber = '+1234567890'; // Replace with actual phone number or get from designer data
     const message = 'Hello! I would like to discuss a design project with you.';
     const url = `whatsapp://send?phone=${designer.phone}&text=${encodeURIComponent(message)}`;
     
@@ -48,63 +52,153 @@ const DesignerProfileScreen = ({ route, navigation }) => {
       if (supported) {
         Linking.openURL(url);
       } else {
-        // Fallback if WhatsApp is not installed
-        const webUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+        const webUrl = `https://wa.me/${designer.phone}?text=${encodeURIComponent(message)}`;
         Linking.openURL(webUrl);
       }
     }).catch(err => {
       console.error('Error opening WhatsApp:', err);
-      // Fallback to web version
-      const webUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+      const webUrl = `https://wa.me/${designer.phone}?text=${encodeURIComponent(message)}`;
       Linking.openURL(webUrl);
     });
   };
   
   useEffect(() => {
     FetchDesignerWorks();
+    fetchDesignerStats();
   }, []);
-  
 
-  //fetch designer works from designer data on component mount
+  // Fetch designer works from designer data on component mount
   const FetchDesignerWorks = async () => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const response = await axios.get(
-        `${BASE_URL}/api/designers/works/${designer.id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const response = await axios.get(
+      `${BASE_URL}/api/designers/works/${designer.id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
         }
-      );
+      }
+    );
 
-      // You can now use the data, e.g., set it in state:
-      const works = response.data.works;
-      setDesignerWorks(works);
-      console.log("Works",works);
-      
-      // Initialize likedPosts state based on fetched data
-      const initialLikedPosts = {};
-      works.forEach(post => {
-        initialLikedPosts[post.id] = post.hasliked || false;
-      });
-      setLikedPosts(initialLikedPosts);
+    const works = response.data.works;
+    setDesignerWorks(works);
+    //console.log("Designer Works", works);
+    //console.log("hasfollowed this designer",response.data.hasFollowedThisDesigner)
+    setIsFollowing(response.data.hasFollowedThisDesigner);
+    
+    const initialLikedPosts = {};
+    works.forEach(post => {
+      initialLikedPosts[post.id] = post.hasliked || false;
+    });
+    setLikedPosts(initialLikedPosts);
 
-      console.log("Returned Data", works);
-      console.log('Fetched designer works:', response.data);
-      return response.data;
+    return response.data;
 
-    } catch (error) {
-      console.error('Error fetching designer works:', error);
+  } catch (error) {
+    console.error('Error fetching designer works:', error);
+  }
+};
+
+
+  //fetct designer stats
+  const fetchDesignerStats = async () => {
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const response = await axios.get(`${BASE_URL}/api/designers/stats/${designer.id}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      }
+    });
+
+    const stats = response.data;
+    setDesignerStats(stats);
+    //console.log('Designer Stats:', stats);
+    return stats;
+
+  } catch (error) {
+    console.error('Failed to fetch designer stats:', error);
+    return null;
+  }
+};
+
+const FollowDesigner = async (designerId) => {
+  //console.log("Toggling follow for designer ID:", designerId);
+  try {
+    const token = await AsyncStorage.getItem('userToken');
+    const response = await axios.post(
+      `${BASE_URL}/api/designers/toggle-follow/${designerId}`,
+      {},
+      {
+
+        headers: {
+
+          Authorization: `Bearer ${token}`,
+        }
+      }
+    );
+    if (response.data.isFollowing !== undefined) {
+      setIsFollowing(response.data.isFollowing);
+      //console.log("Following Data", response.data.isFollowing);
+         setDesignerStats(prevStats => ({
+        ...prevStats,
+        followers: response.data.isFollowing
+          ? prevStats.followers + 1
+          : Math.max(prevStats.followers - 1, 0) // ensure it doesn’t go below 0
+      }));
+    }
+  } catch (error) {
+    console.error('Error following/unfollowing designer:', error);
+    Alert.alert('Error', 'Failed to follow/unfollow designer. Please try again.');
+  }
+};
+
+  // Pause all videos
+  const pauseAllVideos = () => {
+    Object.keys(videoRefs.current).forEach(key => {
+      if (videoRefs.current[key]) {
+        videoRefs.current[key].pauseAsync();
+      }
+    });
+  };
+
+  // Play video for specific item
+  const playVideo = (postId, index) => {
+    const videoKey = `${postId}-${index}`;
+    if (videoRefs.current[videoKey]) {
+      videoRefs.current[videoKey].playAsync();
     }
   };
 
-  const designerStats = {
-    works: 24,
-    followers: '1.2K',
-    following: 156,
-    likes: '2.4K',
-  };
+  // Handle viewable items change for vertical scrolling in modal
+  const onVerticalViewableItemsChanged = useRef(({ viewableItems }) => {
+    // Pause all videos first
+    pauseAllVideos();
+    
+    // Get the currently visible post IDs in modal
+    const newVisiblePosts = new Set(viewableItems.map(item => item.key));
+    setVisiblePosts(newVisiblePosts);
+    
+    // Auto-play videos for the first visible post in modal
+    if (viewableItems.length > 0) {
+      const firstVisibleItem = viewableItems[0];
+      const postId = firstVisibleItem.key;
+      const activeIndex = activeImageIndex;
+      
+      // Check if the active item in this post is a video
+      const post = designerWorks.find(p => p.id === postId);
+      if (post && post.images[activeIndex]) {
+        const isVideo = isVideoFile(post.images[activeIndex]);
+        if (isVideo) {
+          playVideo(postId, activeIndex);
+        }
+      }
+    }
+  }).current;
+
+  const verticalViewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 70, // Consider item visible when 70% is on screen in modal
+    minimumViewTime: 150, // Minimum time in ms to consider item visible
+  }).current;
 
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
@@ -123,13 +217,20 @@ const DesignerProfileScreen = ({ route, navigation }) => {
     }
   };
 
+  // Check if file is video based on extension
+  const isVideoFile = (url) => {
+    return url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov') || url.toLowerCase().endsWith('.avi');
+  };
+
   const openPost = (post, index) => {
+    // Pause all videos when opening a new post
+    pauseAllVideos();
+
     setSelectedPost(post);
     setActivePostIndex(index);
     setActiveImageIndex(0);
     setPostModalVisible(true);
     
-    // Scroll to the selected post in vertical view
     setTimeout(() => {
       verticalFlatListRef.current?.scrollToIndex({
         index: index,
@@ -139,10 +240,14 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   };
 
   const closePost = () => {
+    // Pause all videos when closing modal
+    pauseAllVideos();
+    
     setPostModalVisible(false);
     setSelectedPost(null);
     setActiveImageIndex(0);
     setActivePostIndex(0);
+    setVisiblePosts(new Set());
   };
 
   const openComments = (post) => {
@@ -154,7 +259,8 @@ const DesignerProfileScreen = ({ route, navigation }) => {
     setCommentModalVisible(false);
     setNewComment('');
   };
-const toggleLike = async (postId) => {
+
+  const toggleLike = async (postId) => {
   try {
     const userToken = await AsyncStorage.getItem('userToken');
     if (!userToken) {
@@ -162,28 +268,24 @@ const toggleLike = async (postId) => {
       return;
     }
 
-    // Get current like status and likes count
     const currentLikedStatus = likedPosts[postId];
     const currentPost = designerWorks.find(post => post.id === postId);
     
-    // Use only one property consistently - prefer likesCount if available, otherwise use likes
-    const currentLikesCount = currentPost?.likesCount || currentPost?.likes || 0;
+    // Use consistent property name - check both possibilities
+    const currentLikesCount = currentPost?.likes || currentPost?.likesCount || 0;
 
-    // Optimistically update UI - update both like status and likes count
+    // Optimistic update
     setLikedPosts(prev => ({
       ...prev,
       [postId]: !prev[postId]
     }));
 
-    // Update designer works with new likes count immediately - UPDATE ONLY ONE PROPERTY
     setDesignerWorks(prevData => 
       prevData.map(post => 
         post.id === postId 
           ? {
               ...post,
-              // UPDATE ONLY ONE PROPERTY - choose either likesCount or likes
-              likesCount: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
-              // REMOVE THIS LINE: likes: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
+              likes: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
             }
           : post
       )
@@ -200,17 +302,14 @@ const toggleLike = async (postId) => {
       }
     );
 
-    console.log('Toggle like response:', response.data);
-
-    // If backend returns updated likes count, sync with it
+    // Update with server response using consistent property name
     if (response.data.updatedLikesCount !== undefined) {
       setDesignerWorks(prevData => 
         prevData.map(post => 
           post.id === postId 
             ? {
                 ...post,
-                likesCount: response.data.updatedLikesCount
-                // REMOVE THIS LINE: likes: response.data.updatedLikesCount
+                likes: response.data.updatedLikesCount
               }
             : post
         )
@@ -220,25 +319,22 @@ const toggleLike = async (postId) => {
   } catch (error) {
     console.error('Error toggling like:', error);
     
-    // Revert optimistic update if error occurs
+    // Revert on error
     const currentPost = designerWorks.find(post => post.id === postId);
-    const currentLikesCount = currentPost?.likesCount || currentPost?.likes || 0;
+    const currentLikesCount = currentPost?.likes || currentPost?.likesCount || 0;
     const currentLikedStatus = likedPosts[postId];
 
     setLikedPosts(prev => ({
       ...prev,
-      [postId]: !prev[postId]  // revert the change
+      [postId]: !prev[postId]
     }));
 
-    // Revert likes count - UPDATE ONLY ONE PROPERTY
     setDesignerWorks(prevData => 
       prevData.map(post => 
         post.id === postId 
           ? {
               ...post,
-              // UPDATE ONLY ONE PROPERTY
-              likesCount: currentLikedStatus ? currentLikesCount + 1 : currentLikesCount - 1
-              // REMOVE THIS LINE: likes: currentLikedStatus ? currentLikesCount + 1 : currentLikesCount - 1
+              likes: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
             }
           : post
       )
@@ -258,7 +354,6 @@ const toggleLike = async (postId) => {
         return;
       }
 
-      // Create a temporary comment for immediate UI update
       const tempComment = {
         id: `temp-${Date.now()}`,
         text: newComment.trim(),
@@ -270,7 +365,6 @@ const toggleLike = async (postId) => {
         isTemp: true
       };
 
-      // Optimistically update the UI immediately
       const updatedWorks = designerWorks.map(post => 
         post.id === selectedPost.id 
           ? {
@@ -282,7 +376,6 @@ const toggleLike = async (postId) => {
 
       setDesignerWorks(updatedWorks);
       
-      // Update the selected post to show the new comment immediately
       setSelectedPost(prev => ({
         ...prev,
         comments: [...(prev.comments || []), tempComment]
@@ -290,7 +383,6 @@ const toggleLike = async (postId) => {
 
       setNewComment('');
 
-      // Call backend API
       const payload = {
         text: newComment.trim(),
       };
@@ -308,7 +400,6 @@ const toggleLike = async (postId) => {
 
       const savedComment = response.data.comment;
 
-      // Replace temporary comment with saved comment from backend
       const finalWorks = updatedWorks.map(post => 
         post.id === selectedPost.id 
           ? {
@@ -322,7 +413,6 @@ const toggleLike = async (postId) => {
 
       setDesignerWorks(finalWorks);
       
-      // Update selected post in modal
       if (commentModalVisible) {
         setSelectedPost(prev => ({
           ...prev,
@@ -335,7 +425,6 @@ const toggleLike = async (postId) => {
     } catch (error) {
       console.error('Error posting comment:', error);
       
-      // Revert optimistic update on error
       const revertedWorks = designerWorks.map(post => 
         post.id === selectedPost.id 
           ? {
@@ -358,44 +447,127 @@ const toggleLike = async (postId) => {
     }
   };
 
-  const handleVerticalScroll = (event) => {
-    const contentOffsetY = event.nativeEvent.contentOffset.y;
-    const visibleItemHeight = screenWidth + 400; // Approximate height of each post
-    const index = Math.round(contentOffsetY / visibleItemHeight);
-    
-    if (index >= 0 && index < designerWorks.length) {
-      setActivePostIndex(index);
-      setSelectedPost(designerWorks[index]);
-      setActiveImageIndex(0);
+  const updateActiveImageIndex = (postId, index) => {
+    // Pause all videos when swiping to new media item
+    pauseAllVideos();
+
+    setActiveImageIndex(index);
+
+    // If this post is currently visible in modal, play the new active video
+    if (visiblePosts.has(postId)) {
+      const post = designerWorks.find(p => p.id === postId);
+      if (post && post.images[index]) {
+        const isVideo = isVideoFile(post.images[index]);
+        if (isVideo) {
+          playVideo(postId, index);
+        }
+      }
     }
   };
 
- const renderGridItem = ({ item, index }) => {
-  const isLiked = likedPosts[item.id];
-  // Use only one property consistently
-  const likesCount = item.likesCount || item.likes || 0;
+  const renderMediaItem = ({ item, index, postId }) => {
+    const isVideo = isVideoFile(item);
+    const isPostVisible = visiblePosts.has(postId);
+    const isActiveItem = activeImageIndex === index;
+    
+    return (
+      <View style={styles.mediaItem}>
+        {isVideo ? (
+          <View style={styles.videoContainer}>
+            <Video
+              ref={ref => videoRefs.current[`${postId}-${index}`] = ref}
+              source={{ uri: item }}
+              style={styles.video}
+              resizeMode="cover"
+              shouldPlay={isPostVisible && isActiveItem} // Auto-play only when post is visible and this is active item
+              isLooping
+              useNativeControls
+              onPlaybackStatusUpdate={(status) => {
+                // Optional: Handle playback status updates if needed
+              }}
+            />
+            {!isPostVisible && (
+              <TouchableOpacity 
+                style={styles.playButton}
+                onPress={() => {
+                  if (videoRefs.current[`${postId}-${index}`]) {
+                    videoRefs.current[`${postId}-${index}`].playAsync();
+                  }
+                }}
+              >
+                <Icon name="play-arrow" size={48} color="white" />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <Image
+            source={{ uri: item }}
+            style={styles.detailImage}
+            resizeMode="cover"
+          />
+        )}
+        {isVideo && (
+          <View style={styles.videoIndicator}>
+            <Icon name="videocam" size={16} color="#666" />
+            <Text style={styles.videoIndicatorText}>Video</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderGridItem = ({ item, index }) => {
+    const isLiked = likedPosts[item.id];
+  // Use consistent property name - check both possibilities
+  const likesCount = item.likes || item.likesCount || 0;
   const displayLikes = likesCount;
+  const firstMedia = item.images[0];
+  const isVideo = isVideoFile(firstMedia);
 
     return (
       <TouchableOpacity 
         style={styles.gridItem}
         onPress={() => openPost(item, index)}
       >
-        <Image
-          source={{ uri: item.images[0] }}
-          style={styles.gridImage}
-          resizeMode="cover"
-        />
+        {isVideo ? (
+          <View style={styles.gridVideoContainer}>
+            <Video
+              source={{ uri: firstMedia }}
+              style={styles.gridImage}
+              resizeMode="cover"
+              shouldPlay={false}
+              isMuted={true}
+            />
+            <View style={styles.videoOverlay}>
+              <Icon name="play-arrow" size={24} color="white" />
+            </View>
+          </View>
+        ) : (
+          <Image
+            source={{ uri: firstMedia }}
+            style={styles.gridImage}
+            resizeMode="cover"
+          />
+        )}
+        
         {/* Show multiple images indicator */}
         {item.images.length > 1 && (
           <View style={styles.multipleImagesIndicator}>
             <Icon name="collections" size={16} color="#FFFFFF" />
           </View>
         )}
+        
+        {/* Video indicator for grid */}
+        {isVideo && (
+          <View style={styles.gridVideoIndicator}>
+            <Icon name="videocam" size={12} color="#FFFFFF" />
+          </View>
+        )}
+        
         {/* Like overlay */}
         <View style={styles.gridOverlay}>
           <View style={styles.likeContainer}>
-            <Icon name="favorite" size={16} color="#FFFFFF" />
+            <Icon name="favorite" size={16} color="red" />
             <Text style={styles.likeCount}>{displayLikes}</Text>
           </View>
         </View>
@@ -403,19 +575,9 @@ const toggleLike = async (postId) => {
     );
   };
 
-  const renderImageItem = ({ item, index }) => (
-    <View style={styles.imageItem}>
-      <Image
-        source={{ uri: item }}
-        style={styles.detailImage}
-        resizeMode="cover"
-      />
-    </View>
-  );
-
   const renderCommentItem = ({ item }) => (
     <View style={styles.commentItem}>
-      <Image source={{ uri: item.user?.avatar || 'https://via.placeholder.com/36' }} style={styles.commentAvatar} />
+      <Image source={{ uri: item.user?.avatar || 'https://www.freepik.com/free-vector/blue-circle-with-white-user_145857007.htm#fromView=keyword&page=1&position=0&uuid=a1749431-0ca1-4f52-889e-ed01c150ed5b&query=Avatar+placeholder' }} style={styles.commentAvatar} />
       <View style={styles.commentContent}>
         <View style={styles.commentHeader}>
           <Text style={styles.commentUserName}>{item.user?.name || 'User'}</Text>
@@ -429,7 +591,6 @@ const toggleLike = async (postId) => {
     </View>
   );
 
-  // Render empty state for comments
   const renderEmptyComments = () => (
     <View style={styles.emptyCommentsContainer}>
       <Icon name="chat-bubble-outline" size={64} color="#E0E0E0" />
@@ -441,12 +602,12 @@ const toggleLike = async (postId) => {
   );
 
   const renderVerticalPost = ({ item, index }) => {
-  const isLiked = likedPosts[item.id];
-  // Use only one property consistently
-  const likesCount = item.likesCount || item.likes || 0;
+     const isLiked = likedPosts[item.id];
+  const hasliked = item.hasliked;
+  // Use consistent property name - check both possibilities
+  const likesCount = item.likes || item.likesCount || 0;
   const displayLikes = likesCount;
-
-    const comments = item.comments || [];
+  const comments = item.comments || [];
 
     return (
       <View style={styles.verticalPostContainer}>
@@ -462,11 +623,13 @@ const toggleLike = async (postId) => {
           </View>
         </View>
 
-        {/* Image Carousel */}
+        {/* Media Carousel */}
         <View style={styles.carouselContainer}>
           <FlatList
             data={item.images}
-            renderItem={renderImageItem}
+            renderItem={({ item: mediaItem, index: mediaIndex }) => 
+              renderMediaItem({ item: mediaItem, index: mediaIndex, postId: item.id })
+            }
             keyExtractor={(img, imgIndex) => imgIndex.toString()}
             horizontal
             pagingEnabled
@@ -475,11 +638,11 @@ const toggleLike = async (postId) => {
               const newIndex = Math.round(
                 event.nativeEvent.contentOffset.x / screenWidth
               );
-              setActiveImageIndex(newIndex);
+              updateActiveImageIndex(item.id, newIndex);
             }}
           />
           
-          {/* Image Counter */}
+          {/* Media Counter */}
           {item.images.length > 1 && (
             <View style={styles.imageCounter}>
               <Text style={styles.imageCounterText}>
@@ -523,9 +686,9 @@ const toggleLike = async (postId) => {
             >
               <Icon name="chat-bubble-outline" size={24} color="#666" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.postActionButton}>
+            {/* <TouchableOpacity style={styles.postActionButton}>
               <Icon name="share" size={24} color="#666" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
           <TouchableOpacity style={styles.postActionButton}>
             <Icon name="bookmark-border" size={24} color="#666" />
@@ -606,11 +769,11 @@ const toggleLike = async (postId) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-back" size={24} color="#1D1D1F" />
+         <Ionicons name="chevron-back" size={24} color="#4a6bff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerTitle}>Designer Profile</Text>
         <TouchableOpacity style={styles.menuButton}>
-          <Icon name="more-vert" size={24} color="#1D1D1F" />
+          <Icon name="more-vert" size={24} color="#4a6bff" />
         </TouchableOpacity>
       </View>
 
@@ -648,9 +811,13 @@ const toggleLike = async (postId) => {
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.followButton}>
-              <Text style={styles.followButtonText}>Follow</Text>
-            </TouchableOpacity>
+            <TouchableOpacity 
+  style={styles.followButton} 
+  onPress={() => FollowDesigner(designer.id)} // Pass your parameter here
+>
+  <Text style={styles.followButtonText}>{isFollowing ? 'Unfollow' : 'Follow'}</Text>
+</TouchableOpacity>
+
             <TouchableOpacity 
               style={styles.messageButton}
               onPress={openWhatsApp}
@@ -711,13 +878,18 @@ const toggleLike = async (postId) => {
 
             <View style={styles.skillsSection}>
               <Text style={styles.sectionTitle}>Skills & Expertise</Text>
-              <View style={styles.skillsContainer}>
-                {['Brand Identity', 'UI/UX Design', 'Illustration', 'Typography', 'Motion Graphics', 'Art Direction'].map((skill) => (
-                  <View key={skill} style={styles.skillTag}>
-                    <Text style={styles.skillText}>{skill}</Text>
-                  </View>
-                ))}
-              </View>
+             <View style={styles.skillsContainer}>
+  {designerStats.skills && designerStats.skills.length > 0 ? (
+    designerStats.skills.map((skill) => (
+      <View key={skill} style={styles.skillTag}>
+        <Text style={styles.skillText}>{skill}</Text>
+      </View>
+    ))
+  ) : (
+    <Text style={styles.noSkillsText}>No skills added yet</Text>
+  )}
+</View>
+
             </View>
           </View>
         )}
@@ -751,12 +923,13 @@ const toggleLike = async (postId) => {
             vertical
             pagingEnabled
             showsVerticalScrollIndicator={false}
-            onMomentumScrollEnd={handleVerticalScroll}
+            onViewableItemsChanged={onVerticalViewableItemsChanged}
+            viewabilityConfig={verticalViewabilityConfig}
             initialScrollIndex={activePostIndex}
-            snapToInterval={screenWidth + 50} // Approximate height of each post
+            snapToInterval={screenWidth + 400}
             decelerationRate="fast"
             getItemLayout={(data, index) => ({
-              length: screenWidth + 400, // Approximate height
+              length: screenWidth + 400,
               offset: (screenWidth + 400) * index,
               index,
             })}
@@ -829,32 +1002,37 @@ const toggleLike = async (postId) => {
   );
 };
 
-// ... (styles remain exactly the same as in your original code)
+// ... styles remain exactly the same as in your original code ...
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+    
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 25,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
   backButton: {
     padding: 4,
+    
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: '#4a6bff',
+   
+    
   },
   menuButton: {
     padding: 4,
+    
   },
   scrollView: {
     flex: 1,
@@ -984,6 +1162,29 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  gridVideoContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -12 }, { translateY: -12 }],
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    padding: 4,
+  },
+  gridVideoIndicator: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 8,
+    padding: 4,
+  },
   multipleImagesIndicator: {
     position: 'absolute',
     top: 8,
@@ -1068,7 +1269,7 @@ const styles = StyleSheet.create({
   verticalModalTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: '#4a6bff',
   },
   closeButton: {
     padding: 4,
@@ -1076,8 +1277,50 @@ const styles = StyleSheet.create({
   // Vertical Post Styles
   verticalPostContainer: {
     width: screenWidth,
-    height: screenWidth + 400, // Approximate height for each post
+    height: screenWidth + 400,
     paddingBottom: 20,
+  },
+  // Media Styles
+  mediaItem: {
+    width: screenWidth,
+    height: screenWidth,
+    position: 'relative',
+  },
+  videoContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  playButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -24 }, { translateY: -24 }],
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 30,
+    padding: 8,
+  },
+  videoIndicator: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  videoIndicatorText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+    fontWeight: '500',
   },
   // Post Detail Styles
   postHeader: {
@@ -1106,10 +1349,6 @@ const styles = StyleSheet.create({
   },
   carouselContainer: {
     position: 'relative',
-    height: screenWidth, // Full screen width for images
-  },
-  imageItem: {
-    width: screenWidth,
     height: screenWidth,
   },
   detailImage: {
@@ -1340,6 +1579,13 @@ const styles = StyleSheet.create({
   postCommentTextDisabled: {
     color: '#999',
   },
+  noSkillsText: {
+  fontStyle: 'italic',
+  color: '#888',
+  textAlign: 'center',
+  marginTop: 10,
+}
+
 });
 
 export default DesignerProfileScreen;

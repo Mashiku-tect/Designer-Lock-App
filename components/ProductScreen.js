@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useRef } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, Alert, SafeAreaView, StatusBar, Modal, TextInput } from 'react-native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
+import { Video } from 'expo-av';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,6 +22,7 @@ const ProductScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
+  const videoRefs = useRef([]);
 
   // Fetch product price on components mount
   useEffect(() => {
@@ -191,8 +194,9 @@ const ProductScreen = ({ route, navigation }) => {
         try {
           const fileName = img.title ? img.title : `image_${img.id}`;
           const image_url = `${BASE_URL}/${img.path}`;
-          const extension = image_url.split('.').pop().split('?')[0]; 
-          const safeFileName = `${fileName}.${extension}`;
+          const extension = image_url.match(/\.(\w+)(?:\?|$)/);
+const fileExt = extension ? extension[1] : 'jpg';
+const safeFileName = `${fileName}.${fileExt}`;
 
           const fileUri = FileSystem.documentDirectory + safeFileName;
           const downloadResult = await FileSystem.downloadAsync(image_url, fileUri);
@@ -209,7 +213,7 @@ const ProductScreen = ({ route, navigation }) => {
         }
       }
 
-      Alert.alert('Download Complete', 'All images have been downloaded successfully.');
+      Alert.alert('Download Complete', 'All Media(s) have been downloaded successfully.');
     } catch (err) {
       console.error(err);
       Alert.alert('Download Error', 'Could not download images. Please try again.');
@@ -219,14 +223,34 @@ const ProductScreen = ({ route, navigation }) => {
   };
 
   // Render each image with watermark overlay
-  const renderItem = ({ item }) => (
+const renderItem = ({ item,index }) => {
+  const fileUri = item.image?.uri || `${BASE_URL}/${item.path}`;
+  const isVideo =
+    item.fileType === 'video' ||
+    fileUri.match(/\.(mp4|mov|avi|mkv)$/i);
+
+  return (
     <View style={styles.imageWrapper}>
-      <Image
-        source={{ uri: item.image.uri }}
-        style={styles.image}
-        resizeMode="cover"
-      />
-      
+      {isVideo ? (
+        <Video
+        ref={(ref) => (videoRefs.current[index] = ref)}
+          source={{ uri: fileUri }}
+          style={styles.image}
+          resizeMode="cover"
+           shouldPlay ={currentIndex === index}// 👈 auto-play when visible
+          isLooping // 👈 loop continuously
+          useNativeControls={true}
+          
+        />
+      ) : (
+        <Image
+          source={{ uri: fileUri }}
+          style={styles.image}
+          resizeMode="cover"
+        />
+      )}
+
+      {/* 🔒 Add watermark overlay if not paid */}
       {!isPaid && (
         <View style={styles.watermarkContainer}>
           <View style={styles.watermark}>
@@ -237,6 +261,8 @@ const ProductScreen = ({ route, navigation }) => {
       )}
     </View>
   );
+};
+
 
   if (loading) {
     return (
@@ -253,7 +279,7 @@ const ProductScreen = ({ route, navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="#333" />
+          <Ionicons name="chevron-back" size={28} color="#4a6bff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Products</Text>
         <View style={styles.placeholder} />
@@ -297,7 +323,7 @@ const ProductScreen = ({ route, navigation }) => {
       <View style={styles.infoContainer}>
         <Text style={styles.productTitle}>Product Collection</Text>
         <Text style={styles.productDescription}>
-          {products.length} high-quality images available for download after purchase
+          {products.length} media file(s) (images/videos) available for download after purchase
         </Text>
         
         <View style={styles.priceContainer}>
@@ -328,7 +354,7 @@ const ProductScreen = ({ route, navigation }) => {
             ) : (
               <View style={styles.buttonContent}>
                 <Ionicons name="lock-open" size={20} color="#fff" />
-                <Text style={styles.payButtonText}>Unlock All Images</Text>
+                <Text style={styles.payButtonText}>Unlock All Medias</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -417,14 +443,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eaeaea',
     backgroundColor: '#fff',
+    marginTop:22,
   },
   backButton: {
     padding: 4,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#333',
+    color: '#4a6bff',
   },
   placeholder: {
     width: 36,

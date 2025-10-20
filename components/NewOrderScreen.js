@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import BASE_URL from './Config';
 import Toast from 'react-native-toast-message';
+import { Video } from 'expo-av';
 
 export default function NewOrderScreen({ navigation }) {
   const [formData, setFormData] = useState({
@@ -110,59 +111,46 @@ export default function NewOrderScreen({ navigation }) {
                type: 'success',
                text2: 'Product ID has been copied to clipboard',
              });
+             navigation.navigate('Dashboard');
     }
   };
 
   const handleUpload = async () => {
-    try {
-      let result;
-      if (Platform.OS === 'web') {
-        result = await DocumentPicker.getDocumentAsync({
-          type: ['image/png', 'image/jpeg'],
-          copyToCacheDirectory: false,
-          multiple: true,
-        });
-        
-        if (result.type === 'success' && result.assets) {
-          const validFiles = result.assets.filter(file => 
-            file.mimeType === 'image/png' || file.mimeType === 'image/jpeg'
-          );
-          setUploadedFiles(prev => [...prev, ...validFiles]);
-        }
-      } else {
-        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permissionResult.granted) {
-         // Alert.alert('Permission required', 'We need access to your photos to upload files');
-         Toast.show({
-                  type: 'info',
-                  text2: 'Permission required We need access to your photos to upload files'
-                });
-          return;
-        }
-
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false,
-          allowsMultipleSelection: true,
-          quality: 1,
-        });
-        
-        if (!result.canceled && result.assets) {
-          const validFiles = result.assets.filter(asset => 
-            asset.uri.endsWith('.png') || asset.uri.endsWith('.jpg') || asset.uri.endsWith('.jpeg')
-          );
-          setUploadedFiles(prev => [...prev, ...validFiles]);
-        }
-      }
-    } catch (error) {
-      //console.error('Error uploading files:', error);
-      //Alert.alert('Error', 'Error uploading files. Please try again.');
+  try {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
       Toast.show({
-               type: 'error',
-               text2: 'Error uploading files. Please try again',
-             });
+        type: 'info',
+        text2: 'Permission required: We need access to your gallery',
+      });
+      return;
     }
-  };
+
+    // ✅ Allow both images and videos
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All, // both
+      allowsEditing: false,
+      allowsMultipleSelection: true,
+      quality: 1,
+    });
+
+    if (!result.canceled && result.assets) {
+      const validFiles = result.assets.filter(asset =>
+        asset.uri.match(/\.(jpg|jpeg|png|mp4|mov|mkv)$/i)
+      );
+
+      // ✅ Add both images and videos
+      setUploadedFiles(prev => [...prev, ...validFiles]);
+    }
+  } catch (error) {
+    console.log('Error uploading files:', error);
+    Toast.show({
+      type: 'error',
+      text2: 'Error uploading files. Please try again',
+    });
+  }
+};
+
 
   const removeFile = (index) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
@@ -187,7 +175,7 @@ export default function NewOrderScreen({ navigation }) {
           style={styles.headerIcon}
           hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
         >
-          <Ionicons name="arrow-back" size={24} color="#4a6bff" />
+          <Ionicons name="chevron-back" size={24} color="#4a6bff" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>
@@ -325,24 +313,39 @@ export default function NewOrderScreen({ navigation }) {
               {/* Display uploaded files */}
               {uploadedFiles.length > 0 && (
                 <View style={styles.uploadedFilesContainer}>
-                  {uploadedFiles.map((file, index) => (
-                    <View key={`file-${index}`} style={styles.fileItem}>
-                      <Ionicons name="document" size={20} color="#4a6bff" />
-                      <Text 
-                        style={styles.fileName}
-                        numberOfLines={1}
-                        ellipsizeMode="middle"
-                      >
-                        {file.name || file.fileName || file.uri.split('/').pop()}
-                      </Text>
-                      <TouchableOpacity 
-                        onPress={() => removeFile(index)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <Ionicons name="close-circle" size={20} color="#ff4a4a" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
+     {uploadedFiles.map((file, index) => {
+  const isVideo = file.uri.endsWith('.mp4') || file.uri.endsWith('.mov') || file.uri.endsWith('.mkv');
+  
+  return (
+    <View key={`file-${index}`} style={styles.previewItem}>
+      {isVideo ? (
+        <Video
+          source={{ uri: file.uri }}
+          style={styles.previewMedia}
+          resizeMode="cover"
+          useNativeControls={false}
+          shouldPlay={false}
+        />
+      ) : (
+        <Image
+          source={{ uri: file.uri }}
+          style={styles.previewMedia}
+          resizeMode="cover"
+        />
+      )}
+      
+      <View style={styles.previewActions}>
+        <Text style={styles.fileName}>
+          {file.name || file.fileName || file.uri.split('/').pop()}
+        </Text>
+        <TouchableOpacity onPress={() => removeFile(index)}>
+          <Ionicons name="close-circle" size={20} color="#ff4a4a" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+})}
+
                 </View>
               )}
             </View>
@@ -389,6 +392,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+    
   },
   header: {
     flexDirection: 'row',
@@ -399,14 +403,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    marginTop:20,
+    marginTop:1,
   },
   headerTitleContainer: {
     flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '600',
     color: '#4a6bff',
   },

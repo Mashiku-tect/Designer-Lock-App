@@ -237,7 +237,7 @@ const ProfileScreen = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#4a6bff" />
+          <Ionicons name="chevron-back" size={24} color="#4a6bff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
         <View style={{ width: 24 }} />
@@ -539,6 +539,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+    
   },
   scrollContainer: {
     paddingBottom: 30,
@@ -551,16 +552,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    marginTop: 0
+    
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '600',
     color: '#4a6bff',
   },
   profileImageContainer: {
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 15,
     marginBottom: 15,
   },
   profileImage: {
@@ -570,7 +571,7 @@ const styles = StyleSheet.create({
   },
   cameraButton: {
     position: 'absolute',
-    right: 100,
+    right: 160,
     bottom: 0,
     backgroundColor: '#4a6bff',
     width: 40,

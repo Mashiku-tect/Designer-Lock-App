@@ -10,7 +10,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const response = await fetch(`${BASE_URL}/api/forgotpassword`, {
+      const response = await fetch(`${BASE_URL}/api/forgot-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

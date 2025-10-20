@@ -1,4 +1,4 @@
-import React, { useState,useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,9 +20,11 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { Ionicons } from '@expo/vector-icons';
+import { Video } from 'expo-av'; // Import Video component
 import BASE_URL from './Config';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const FeedScreen = () => {
   const navigation = useNavigation();
@@ -33,45 +35,97 @@ const FeedScreen = () => {
   const [newComment, setNewComment] = useState('');
   const [feedData, setFeedData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const videoRefs = useRef({}); // To manage video references
+  const flatListRef = useRef(null);
+  const [visiblePosts, setVisiblePosts] = useState(new Set()); // Track visible posts
 
-   useEffect(() => {
+  useEffect(() => {
     fetchFeed();
   }, []);
 
+  //fetch feeds on component mount
   const fetchFeed = async () => {
-  try {
-    const userToken = await AsyncStorage.getItem('userToken');
-    if (!userToken) {
-      console.error('No token found');
+    try {
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken) {
+        console.error('No token found');
+        setLoading(false);
+        return;
+      }
+      const response = await axios.get(`${BASE_URL}/api/feed`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`,
+        }
+      });
+
+      setFeedData(response.data.feed);
+     // console.log('Feed data in Feeds Screen:', response.data.feed);
+      const initialLikedPosts = {};
+      response.data.feed.forEach(post => {
+        initialLikedPosts[post.id] = post.hasliked;
+      });
+      setLikedPosts(initialLikedPosts);
+    } catch (error) {
+      if (error.response) {
+        console.error('Fetch feed error:', error.response.data);
+      } else if (error.request) {
+        console.error('No response from server:', error.request);
+      } else {
+        console.error('Error setting up request:', error.message);
+      }
+    } finally {
       setLoading(false);
-      return;
     }
-    const response = await axios.get(`${BASE_URL}/api/feed`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userToken}`,
+  };
+
+  // Pause all videos
+  const pauseAllVideos = () => {
+    Object.keys(videoRefs.current).forEach(key => {
+      if (videoRefs.current[key]) {
+        videoRefs.current[key].pauseAsync();
       }
     });
+  };
 
-    setFeedData(response.data.feed);
-  // console.log('Feed data:', response.data.feed);
-  const initialLikedPosts = {};
-response.data.feed.forEach(post => {
-  initialLikedPosts[post.id] = post.hasliked;
-});
-setLikedPosts(initialLikedPosts);
-  } catch (error) {
-    if (error.response) {
-      console.error('Fetch feed error:', error.response.data);
-    } else if (error.request) {
-      console.error('No response from server:', error.request);
-    } else {
-      console.error('Error setting up request:', error.message);
+  // Play video for specific item
+  const playVideo = (feedId, index) => {
+    const videoKey = `${feedId}-${index}`;
+    if (videoRefs.current[videoKey]) {
+      videoRefs.current[videoKey].playAsync();
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
+  // Handle viewable items change for vertical scrolling
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    // Pause all videos first
+    pauseAllVideos();
+    
+    // Get the currently visible post IDs
+    const newVisiblePosts = new Set(viewableItems.map(item => item.key));
+    setVisiblePosts(newVisiblePosts);
+    
+    // Auto-play videos for the first visible post
+    if (viewableItems.length > 0) {
+      const firstVisibleItem = viewableItems[0];
+      const feedId = firstVisibleItem.key;
+      const activeIndex = activeIndexes[feedId] || 0;
+      
+      // Check if the active item in this post is a video
+      const post = feedData.find(p => p.id === feedId);
+      if (post && post.images[activeIndex]) {
+        const isVideo = isVideoFile(post.images[activeIndex]);
+        if (isVideo) {
+          playVideo(feedId, activeIndex);
+        }
+      }
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50, // Consider item visible when 50% is on screen
+    minimumViewTime: 100, // Minimum time in ms to consider item visible
+  }).current;
 
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
@@ -95,105 +149,121 @@ setLikedPosts(initialLikedPosts);
   };
 
   const handleProfilePress = (designer) => {
+    // Pause all videos before navigating
+    pauseAllVideos();
     navigation.navigate('FeedProfileScreen', { designer });
   };
 
   const toggleLike = async (postId) => {
-  try {
-    const userToken = await AsyncStorage.getItem('userToken');
-    if (!userToken) {
-      console.error('No token found');
-      return;
-    }
-
-    // Get current like status and likes count
-    const currentLikedStatus = likedPosts[postId];
-    const currentPost = feedData.find(post => post.id === postId);
-    const currentLikesCount = currentPost?.likesCount || 0;
-
-    // Optimistically update UI - update both like status and likes count
-    setLikedPosts(prev => ({
-      ...prev,
-      [postId]: !prev[postId]
-    }));
-
-    // Update feed data with new likes count immediately
-    setFeedData(prevData => 
-      prevData.map(post => 
-        post.id === postId 
-          ? {
-              ...post,
-              likesCount: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
-            }
-          : post
-      )
-    );
-
-    const response = await axios.post(
-      `${BASE_URL}/api/posts/toggle-like/${postId}`,
-      {},
-      {
-        headers: {
-          'Authorization': `Bearer ${userToken}`,
-          'Content-Type': 'application/json',
-        },
+    try {
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken) {
+        console.error('No token found');
+        return;
       }
-    );
 
-    //console.log('Toggle like response:', response.data);
+      // Get current like status and likes count
+      const currentLikedStatus = likedPosts[postId];
+      const currentPost = feedData.find(post => post.id === postId);
+      const currentLikesCount = currentPost?.likesCount || 0;
 
-    // If backend returns updated likes count, sync with it
-    if (response.data.updatedLikesCount !== undefined) {
+      // Optimistically update UI - update both like status and likes count
+      setLikedPosts(prev => ({
+        ...prev,
+        [postId]: !prev[postId]
+      }));
+
+      // Update feed data with new likes count immediately
       setFeedData(prevData => 
         prevData.map(post => 
           post.id === postId 
             ? {
                 ...post,
-                likesCount: response.data.updatedLikesCount
+                likesCount: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
               }
             : post
         )
       );
+
+      const response = await axios.post(
+        `${BASE_URL}/api/posts/toggle-like/${postId}`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      // If backend returns updated likes count, sync with it
+      if (response.data.updatedLikesCount !== undefined) {
+        setFeedData(prevData => 
+          prevData.map(post => 
+            post.id === postId 
+              ? {
+                  ...post,
+                  likesCount: response.data.updatedLikesCount
+                }
+              : post
+          )
+        );
+      }
+
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      
+      // Revert optimistic update if error occurs
+      const currentPost = feedData.find(post => post.id === postId);
+      const currentLikesCount = currentPost?.likesCount || 0;
+      const currentLikedStatus = likedPosts[postId];
+
+      setLikedPosts(prev => ({
+        ...prev,
+        [postId]: !prev[postId]  // revert the change
+      }));
+
+      // Revert likes count
+      setFeedData(prevData => 
+        prevData.map(post => 
+          post.id === postId 
+            ? {
+                ...post,
+                likesCount: currentLikedStatus ? currentLikesCount + 1 : currentLikesCount - 1
+              }
+            : post
+        )
+      );
+
+      Alert.alert('Error', 'Failed to update like. Please try again.');
     }
-
-  } catch (error) {
-    console.error('Error toggling like:', error);
-    
-    // Revert optimistic update if error occurs
-    const currentPost = feedData.find(post => post.id === postId);
-    const currentLikesCount = currentPost?.likesCount || 0;
-    const currentLikedStatus = likedPosts[postId];
-
-    setLikedPosts(prev => ({
-      ...prev,
-      [postId]: !prev[postId]  // revert the change
-    }));
-
-    // Revert likes count
-    setFeedData(prevData => 
-      prevData.map(post => 
-        post.id === postId 
-          ? {
-              ...post,
-              likesCount: currentLikedStatus ? currentLikesCount + 1 : currentLikesCount - 1
-            }
-          : post
-      )
-    );
-
-    Alert.alert('Error', 'Failed to update like. Please try again.');
-  }
-};
+  };
 
   const updateActiveIndex = (feedId, index) => {
+    // Pause all videos first
+    pauseAllVideos();
+
+    // Update the active index
     setActiveIndexes(prev => ({
       ...prev,
       [feedId]: index,
     }));
+
+    // If this post is currently visible, play the new active video
+    if (visiblePosts.has(feedId)) {
+      const post = feedData.find(p => p.id === feedId);
+      if (post && post.images[index]) {
+        const isVideo = isVideoFile(post.images[index]);
+        if (isVideo) {
+          playVideo(feedId, index);
+        }
+      }
+    }
   };
 
   const openComments = (post) => {
-    //console.log('post',post);
+    // Pause all videos when opening comments modal
+    pauseAllVideos();
     setSelectedPost(post);
     setCommentModalVisible(true);
   };
@@ -202,6 +272,24 @@ setLikedPosts(initialLikedPosts);
     setCommentModalVisible(false);
     setSelectedPost(null);
     setNewComment('');
+    
+    // When closing comments, resume playing videos for visible posts
+    if (visiblePosts.size > 0) {
+      const firstVisiblePostId = Array.from(visiblePosts)[0];
+      const activeIndex = activeIndexes[firstVisiblePostId] || 0;
+      const post = feedData.find(p => p.id === firstVisiblePostId);
+      if (post && post.images[activeIndex]) {
+        const isVideo = isVideoFile(post.images[activeIndex]);
+        if (isVideo) {
+          playVideo(firstVisiblePostId, activeIndex);
+        }
+      }
+    }
+  };
+
+  //go back
+   const handleBack = () => {
+      navigation.goBack();
   };
 
   const addComment = async () => {
@@ -220,10 +308,10 @@ setLikedPosts(initialLikedPosts);
         text: newComment.trim(),
         timestamp: new Date().toISOString(),
         user: {
-          name: 'You', // You might want to get this from user data
-          avatar: '', // Add default avatar or user's avatar
+          name: 'You',
+          avatar: '',
         },
-        isTemp: true // Flag to identify temporary comments
+        isTemp: true
       };
 
       // Optimistically update the UI immediately
@@ -238,7 +326,6 @@ setLikedPosts(initialLikedPosts);
 
       setFeedData(updatedFeedData);
       
-      // Update the selected post in modal to show the new comment immediately
       setSelectedPost(prev => ({
         ...prev,
         comments: [...prev.comments, tempComment]
@@ -278,7 +365,6 @@ setLikedPosts(initialLikedPosts);
 
       setFeedData(finalFeedData);
       
-      // Update selected post in modal
       if (commentModalVisible) {
         setSelectedPost(prev => ({
           ...prev,
@@ -314,21 +400,66 @@ setLikedPosts(initialLikedPosts);
     }
   };
 
-  const renderWorkItem = ({ item }) => (
-  <View style={styles.workItem}>
-    <Image
-      source={{ uri: item.image }}
-      style={styles.workImage}
-      resizeMode="cover"
-    />
-    {item.description && (
-      <Text style={styles.description}>{item.description}</Text>
-    )}
-  </View>
-);
+  // Check if file is video based on extension
+  const isVideoFile = (url) => {
+    return url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov') || url.toLowerCase().endsWith('.avi');
+  };
+
+  const renderWorkItem = ({ item, index, feedId }) => {
+    const isVideo = isVideoFile(item.image);
+    const isPostVisible = visiblePosts.has(feedId);
+    const isActiveItem = activeIndexes[feedId] === index;
+    
+    return (
+      <View style={styles.workItem}>
+        {isVideo ? (
+          <View style={styles.videoContainer}>
+            <Video
+              ref={ref => videoRefs.current[`${feedId}-${index}`] = ref}
+              source={{ uri: item.image }}
+              style={styles.video}
+              resizeMode="cover"
+              shouldPlay={isPostVisible && isActiveItem} // Auto-play only when post is visible and this is active item
+              isLooping
+              useNativeControls
+              onPlaybackStatusUpdate={(status) => {
+                // Optional: Handle playback status updates if needed
+              }}
+            />
+            {!isPostVisible && (
+              <TouchableOpacity 
+                style={styles.playButton}
+                onPress={() => {
+                  if (videoRefs.current[`${feedId}-${index}`]) {
+                    videoRefs.current[`${feedId}-${index}`].playAsync();
+                  }
+                }}
+              >
+                <Icon name="play-arrow" size={48} color="white" />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <Image
+            source={{ uri: item.image }}
+            style={styles.workImage}
+            resizeMode="cover"
+          />
+        )}
+        {item.description && (
+          <Text style={styles.description}>{item.description}</Text>
+        )}
+        {isVideo && (
+          <View style={styles.videoIndicator}>
+            <Icon name="videocam" size={16} color="#666" />
+            <Text style={styles.videoIndicatorText}>Video</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderCommentItem = ({ item }) => (
-   
     <View style={styles.commentItem}>
       <Image 
         source={{ uri: item.user.avatar || 'https://www.istockphoto.com/vector/user-icon-flat-isolated-on-white-background-user-symbol-vector-illustration-gm1300845620-393045799' }} 
@@ -390,15 +521,19 @@ setLikedPosts(initialLikedPosts);
 
         {/* Work carousel */}
         <View style={styles.carouselContainer}>
-         <FlatList
-  data={item.images}
-  renderItem={({ item: imageItem, index }) => 
-    renderWorkItem({ item: { image: imageItem, description: item.description }, index, feedId: item.id })
-  }
-  keyExtractor={(imageItem, index) => `${item.id}-${index}`}
-  horizontal
-  pagingEnabled
-  showsHorizontalScrollIndicator={false}
+          <FlatList
+            data={item.images}
+            renderItem={({ item: imageItem, index }) => 
+              renderWorkItem({ 
+                item: { image: imageItem, description: item.description }, 
+                index, 
+                feedId: item.id 
+              })
+            }
+            keyExtractor={(imageItem, index) => `${item.id}-${index}`}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={(event) => {
               const newIndex = Math.round(
                 event.nativeEvent.contentOffset.x / (screenWidth - 20)
@@ -407,7 +542,7 @@ setLikedPosts(initialLikedPosts);
             }}
           />
           
-          {/* Image counter for multiple images */}
+          {/* Media counter for multiple items */}
           {item.images.length > 1 && (
             <View style={styles.imageCounter}>
               <Text style={styles.imageCounterText}>
@@ -451,9 +586,9 @@ setLikedPosts(initialLikedPosts);
             >
               <Icon name="chat-bubble-outline" size={24} color="#666" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            {/* <TouchableOpacity style={styles.actionButton}>
               <Icon name="share" size={24} color="#666" />
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
           <TouchableOpacity style={styles.actionButton}>
             <Icon name="bookmark-border" size={24} color="#666" />
@@ -506,18 +641,31 @@ setLikedPosts(initialLikedPosts);
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerContainer}>
+          <TouchableOpacity 
+                  onPress={handleBack}
+                  style={styles.headerIcon}
+                  hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                >
+                  <Ionicons name="chevron-back" size={24} color="#4a6bff" />
+                </TouchableOpacity>
         <Text style={styles.headerTitle}>Design Feed</Text>
         <TouchableOpacity style={styles.headerButton}>
-          <Icon name="tune" size={24} color="#333" />
+          {/* <Icon name="tune" size={24} color="#333" /> */}
         </TouchableOpacity>
       </View>
       
       <FlatList
+        ref={flatListRef}
         data={feedData}
         renderItem={renderFeedItem}
         keyExtractor={item => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        decelerationRate="fast"
+        snapToInterval={screenHeight * 0.8} // Optional: for better snapping between posts
+        snapToAlignment="start"
       />
 
       {/* Comments Modal */}
@@ -589,20 +737,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+   
+    
   },
   headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 13,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1D1D1F',
+     color: '#4a6bff',
+    
   },
   headerButton: {
     padding: 8,
@@ -663,6 +815,42 @@ const styles = StyleSheet.create({
   workImage: {
     width: '100%',
     height: 450,
+  },
+  videoContainer: {
+    width: '100%',
+    height: 450,
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  playButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -24 }, { translateY: -24 }],
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 30,
+    padding: 8,
+  },
+  videoIndicator: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  videoIndicatorText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+    fontWeight: '500',
   },
   description: {
     paddingHorizontal: 16,
@@ -886,6 +1074,13 @@ const styles = StyleSheet.create({
   },
   postCommentTextDisabled: {
     color: '#999',
+  },
+  headerIcon: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop:0
   },
 });
 
