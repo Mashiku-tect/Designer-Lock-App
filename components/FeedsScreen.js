@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -14,6 +16,8 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
+  ActivityIndicator
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -21,7 +25,7 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
-import { Video } from 'expo-av'; // Import Video component
+import { Video } from 'expo-av';
 import BASE_URL from './Config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -35,48 +39,73 @@ const FeedScreen = () => {
   const [newComment, setNewComment] = useState('');
   const [feedData, setFeedData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const videoRefs = useRef({}); // To manage video references
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const videoRefs = useRef({});
   const flatListRef = useRef(null);
-  const [visiblePosts, setVisiblePosts] = useState(new Set()); // Track visible posts
+  const [visiblePosts, setVisiblePosts] = useState(new Set());
 
   useEffect(() => {
     fetchFeed();
   }, []);
 
-  //fetch feeds on component mount
-  const fetchFeed = async () => {
+  const fetchFeed = async (isRefreshing = false) => {
     try {
+      if (isRefreshing) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
       const userToken = await AsyncStorage.getItem('userToken');
       if (!userToken) {
-        console.error('No token found');
-        setLoading(false);
+        setError('Please login to view feeds');
         return;
       }
+
       const response = await axios.get(`${BASE_URL}/api/feed`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${userToken}`,
-        }
+        },
+        timeout: 10000 // 10 second timeout
       });
 
       setFeedData(response.data.feed);
-     // console.log('Feed data in Feeds Screen:', response.data.feed);
       const initialLikedPosts = {};
       response.data.feed.forEach(post => {
         initialLikedPosts[post.id] = post.hasliked;
       });
       setLikedPosts(initialLikedPosts);
+
     } catch (error) {
-      if (error.response) {
-        console.error('Fetch feed error:', error.response.data);
-      } else if (error.request) {
-        console.error('No response from server:', error.request);
+      console.error('Fetch feed error:', error);
+      
+      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
+        setError('Network connection failed. Please check your internet connection.');
+      } else if (error.response?.status === 401) {
+        setError('Session expired. Please login again.');
+      } else if (error.response?.status >= 500) {
+        setError('Server error. Please try again later.');
       } else {
-        console.error('Error setting up request:', error.message);
+        setError('Failed to load feeds. Please try again.');
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+//fetch designer feeds on focus
+  useFocusEffect(
+  useCallback(() => {
+    fetchFeed(false); // explicitly pass false or omit it if false is the default
+  }, [])
+);
+
+
+  const onRefresh = () => {
+    fetchFeed(true);
   };
 
   // Pause all videos
@@ -98,20 +127,16 @@ const FeedScreen = () => {
 
   // Handle viewable items change for vertical scrolling
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
-    // Pause all videos first
     pauseAllVideos();
     
-    // Get the currently visible post IDs
     const newVisiblePosts = new Set(viewableItems.map(item => item.key));
     setVisiblePosts(newVisiblePosts);
     
-    // Auto-play videos for the first visible post
     if (viewableItems.length > 0) {
       const firstVisibleItem = viewableItems[0];
       const feedId = firstVisibleItem.key;
       const activeIndex = activeIndexes[feedId] || 0;
       
-      // Check if the active item in this post is a video
       const post = feedData.find(p => p.id === feedId);
       if (post && post.images[activeIndex]) {
         const isVideo = isVideoFile(post.images[activeIndex]);
@@ -123,8 +148,8 @@ const FeedScreen = () => {
   }).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50, // Consider item visible when 50% is on screen
-    minimumViewTime: 100, // Minimum time in ms to consider item visible
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 100,
   }).current;
 
   const formatDate = (timestamp) => {
@@ -149,7 +174,6 @@ const FeedScreen = () => {
   };
 
   const handleProfilePress = (designer) => {
-    // Pause all videos before navigating
     pauseAllVideos();
     navigation.navigate('FeedProfileScreen', { designer });
   };
@@ -158,22 +182,19 @@ const FeedScreen = () => {
     try {
       const userToken = await AsyncStorage.getItem('userToken');
       if (!userToken) {
-        console.error('No token found');
+        Alert.alert('Error', 'Please login to like posts');
         return;
       }
 
-      // Get current like status and likes count
       const currentLikedStatus = likedPosts[postId];
       const currentPost = feedData.find(post => post.id === postId);
       const currentLikesCount = currentPost?.likesCount || 0;
 
-      // Optimistically update UI - update both like status and likes count
       setLikedPosts(prev => ({
         ...prev,
         [postId]: !prev[postId]
       }));
 
-      // Update feed data with new likes count immediately
       setFeedData(prevData => 
         prevData.map(post => 
           post.id === postId 
@@ -196,7 +217,6 @@ const FeedScreen = () => {
         }
       );
 
-      // If backend returns updated likes count, sync with it
       if (response.data.updatedLikesCount !== undefined) {
         setFeedData(prevData => 
           prevData.map(post => 
@@ -213,17 +233,15 @@ const FeedScreen = () => {
     } catch (error) {
       console.error('Error toggling like:', error);
       
-      // Revert optimistic update if error occurs
       const currentPost = feedData.find(post => post.id === postId);
       const currentLikesCount = currentPost?.likesCount || 0;
       const currentLikedStatus = likedPosts[postId];
 
       setLikedPosts(prev => ({
         ...prev,
-        [postId]: !prev[postId]  // revert the change
+        [postId]: !prev[postId]
       }));
 
-      // Revert likes count
       setFeedData(prevData => 
         prevData.map(post => 
           post.id === postId 
@@ -240,16 +258,13 @@ const FeedScreen = () => {
   };
 
   const updateActiveIndex = (feedId, index) => {
-    // Pause all videos first
     pauseAllVideos();
 
-    // Update the active index
     setActiveIndexes(prev => ({
       ...prev,
       [feedId]: index,
     }));
 
-    // If this post is currently visible, play the new active video
     if (visiblePosts.has(feedId)) {
       const post = feedData.find(p => p.id === feedId);
       if (post && post.images[index]) {
@@ -262,7 +277,6 @@ const FeedScreen = () => {
   };
 
   const openComments = (post) => {
-    // Pause all videos when opening comments modal
     pauseAllVideos();
     setSelectedPost(post);
     setCommentModalVisible(true);
@@ -273,7 +287,6 @@ const FeedScreen = () => {
     setSelectedPost(null);
     setNewComment('');
     
-    // When closing comments, resume playing videos for visible posts
     if (visiblePosts.size > 0) {
       const firstVisiblePostId = Array.from(visiblePosts)[0];
       const activeIndex = activeIndexes[firstVisiblePostId] || 0;
@@ -287,9 +300,8 @@ const FeedScreen = () => {
     }
   };
 
-  //go back
-   const handleBack = () => {
-      navigation.goBack();
+  const handleBack = () => {
+    navigation.goBack();
   };
 
   const addComment = async () => {
@@ -298,11 +310,10 @@ const FeedScreen = () => {
     try {
       const userToken = await AsyncStorage.getItem('userToken');
       if (!userToken) {
-        console.error('No token available');
+        Alert.alert('Error', 'Please login to comment');
         return;
       }
 
-      // Create a temporary comment for immediate UI update
       const tempComment = {
         id: `temp-${Date.now()}`,
         text: newComment.trim(),
@@ -314,7 +325,6 @@ const FeedScreen = () => {
         isTemp: true
       };
 
-      // Optimistically update the UI immediately
       const updatedFeedData = feedData.map(post => 
         post.id === selectedPost.id 
           ? {
@@ -333,7 +343,6 @@ const FeedScreen = () => {
 
       setNewComment('');
 
-      // Call backend API
       const payload = {
         text: newComment.trim(),
       };
@@ -351,7 +360,6 @@ const FeedScreen = () => {
 
       const savedComment = response.data.comment;
 
-      // Replace temporary comment with saved comment from backend
       const finalFeedData = updatedFeedData.map(post => 
         post.id === selectedPost.id 
           ? {
@@ -377,7 +385,6 @@ const FeedScreen = () => {
     } catch (error) {
       console.error('Error posting comment:', error);
       
-      // Revert optimistic update on error
       const revertedFeedData = feedData.map(post => 
         post.id === selectedPost.id 
           ? {
@@ -400,10 +407,33 @@ const FeedScreen = () => {
     }
   };
 
-  // Check if file is video based on extension
   const isVideoFile = (url) => {
     return url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov') || url.toLowerCase().endsWith('.avi');
   };
+
+  // Render empty state for feeds
+  const renderEmptyFeeds = () => (
+    <View style={styles.emptyContainer}>
+      <Icon name="feed" size={80} color="#E0E0E0" />
+      <Text style={styles.emptyTitle}>No Feeds Available</Text>
+      <Text style={styles.emptySubtitle}>
+        {error ? error : 'There are no design feeds to show at the moment.'}
+      </Text>
+      {error && (
+        <TouchableOpacity style={styles.retryButton} onPress={() => fetchFeed()}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  // Render loading state
+  const renderLoading = () => (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#4a6bff" />
+      <Text style={styles.loadingText}>Loading feeds...</Text>
+    </View>
+  );
 
   const renderWorkItem = ({ item, index, feedId }) => {
     const isVideo = isVideoFile(item.image);
@@ -419,12 +449,9 @@ const FeedScreen = () => {
               source={{ uri: item.image }}
               style={styles.video}
               resizeMode="cover"
-              shouldPlay={isPostVisible && isActiveItem} // Auto-play only when post is visible and this is active item
+              shouldPlay={isPostVisible && isActiveItem}
               isLooping
               useNativeControls
-              onPlaybackStatusUpdate={(status) => {
-                // Optional: Handle playback status updates if needed
-              }}
             />
             {!isPostVisible && (
               <TouchableOpacity 
@@ -478,7 +505,6 @@ const FeedScreen = () => {
     </View>
   );
 
-  // Render empty state for comments
   const renderEmptyComments = () => (
     <View style={styles.emptyCommentsContainer}>
       <Icon name="chat-bubble-outline" size={64} color="#E0E0E0" />
@@ -586,9 +612,6 @@ const FeedScreen = () => {
             >
               <Icon name="chat-bubble-outline" size={24} color="#666" />
             </TouchableOpacity>
-            {/* <TouchableOpacity style={styles.actionButton}>
-              <Icon name="share" size={24} color="#666" />
-            </TouchableOpacity> */}
           </View>
           <TouchableOpacity style={styles.actionButton}>
             <Icon name="bookmark-border" size={24} color="#666" />
@@ -638,16 +661,20 @@ const FeedScreen = () => {
     );
   };
 
+  if (loading) {
+    return renderLoading();
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerContainer}>
-          <TouchableOpacity 
-                  onPress={handleBack}
-                  style={styles.headerIcon}
-                  hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                >
-                  <Ionicons name="chevron-back" size={24} color="#4a6bff" />
-                </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={handleBack}
+          style={styles.headerIcon}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        >
+          <Ionicons name="chevron-back" size={24} color="#4a6bff" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Design Feed</Text>
         <TouchableOpacity style={styles.headerButton}>
           {/* <Icon name="tune" size={24} color="#333" /> */}
@@ -660,12 +687,24 @@ const FeedScreen = () => {
         renderItem={renderFeedItem}
         keyExtractor={item => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          feedData.length === 0 && styles.emptyListContent
+        ]}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         decelerationRate="fast"
-        snapToInterval={screenHeight * 0.8} // Optional: for better snapping between posts
+        snapToInterval={screenHeight * 0.8}
         snapToAlignment="start"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#4a6bff']}
+            tintColor="#4a6bff"
+          />
+        }
+        ListEmptyComponent={renderEmptyFeeds}
       />
 
       {/* Comments Modal */}
@@ -679,7 +718,6 @@ const FeedScreen = () => {
           style={styles.modalContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          {/* Modal Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Comments</Text>
             <TouchableOpacity onPress={closeComments} style={styles.closeButton}>
@@ -687,7 +725,6 @@ const FeedScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Comments List */}
           {selectedPost && (
             <FlatList
               data={selectedPost.comments}
@@ -702,7 +739,6 @@ const FeedScreen = () => {
             />
           )}
 
-          {/* Add Comment Input */}
           <View style={styles.addCommentContainer}>
             <TextInput
               style={styles.commentInput}
@@ -737,8 +773,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-   
-    
   },
   headerContainer: {
     flexDirection: 'row',
@@ -748,13 +782,11 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-     color: '#4a6bff',
-    
+    color: '#4a6bff',
   },
   headerButton: {
     padding: 8,
@@ -762,6 +794,54 @@ const styles = StyleSheet.create({
   listContent: {
     paddingVertical: 8,
   },
+  emptyListContent: {
+    flexGrow: 1,
+  },
+  // Empty state styles
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  retryButton: {
+    marginTop: 20,
+    backgroundColor: '#4a6bff',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Loading state styles
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  // ... rest of your existing styles remain the same
   feedItem: {
     backgroundColor: 'white',
     marginBottom: 24,
@@ -1080,7 +1160,7 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop:0
+    marginTop: 0
   },
 });
 

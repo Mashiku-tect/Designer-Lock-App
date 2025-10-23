@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect  } from 'react';
 import { AuthContext } from '../AuthContext';
 import { 
   View, 
@@ -16,6 +16,9 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialIcons, Feather, Entypo, AntDesign } from '@expo/vector-icons';
 import axios from 'axios';
+import { useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import Toast from 'react-native-toast-message';
 import BASE_URL from './Config';
 
 const ProfileScreen = ({ navigation }) => {
@@ -71,6 +74,21 @@ const ProfileScreen = ({ navigation }) => {
 
     fetchUserData();
   }, [userToken]);
+
+  // Refresh when screen is focused
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     fetchUserData();
+  //   }, [])
+  // );
+
+   const handleFollower = () => {
+    navigation.navigate('followerfollowingscreen', { userId: user.id,receivedactivetab:'followers' }); // replace with your target screen
+  };
+
+  const handleFollowing = () => {
+    navigation.navigate('followerfollowingscreen', { userId: user.id,receivedactivetab:'following' }); // replace with your target screen
+  };
 
   // Upload profile image to backend
   const uploadImage = async (imageUri) => {
@@ -175,7 +193,13 @@ const ProfileScreen = ({ navigation }) => {
 
   // Add a new skill
   const addSkill = async () => {
-    if (newSkill.trim() === '') return;
+    if (newSkill.trim() === '') {
+      Toast.show({
+                 type: 'error',
+                 text2: "Skill is Required",
+               });
+               return;
+    }
     
     try {
      //const updatedSkills = [...skills, newSkill.trim()];
@@ -184,31 +208,52 @@ const ProfileScreen = ({ navigation }) => {
           Authorization: `Bearer ${userToken}`,
         },
       });
+      if(response.data.success){
+        Toast.show({
+                 type: 'success',
+                 text2: response.data.newskill+" skill added successfully",
+               });
+
+      }
        const updatedSkills = response.data.skills || [];
       setSkills(updatedSkills);
       setNewSkill('');
     } catch (error) {
-      Alert.alert('Error', 'Failed to add skill');
-      console.error(error);
+      //Alert.alert('Error', 'Failed to add skill');
+      //console.error(error);
+      Toast.show({
+                 type: 'error',
+                 text2: error.response.data.message,
+               });
     }
   };
 
   // Delete a skill
   const deleteSkill = async (index) => {
     try {
-     //const updatedSkills = skills.filter((_, i) => i !== index);
-      await axios.delete(`${BASE_URL}/api/updateprofile/deleteskill/${index}`, { }, {
+     
+    const response=  await axios.delete(`${BASE_URL}/api/updateprofile/deleteskill/${index}`, { }, {
         headers: {
           Authorization: `Bearer ${userToken}`,
         },
       });
-      const updatedSkills = skills.filter((s) => s.id !== index);
+      if(response.data.success){
+        Toast.show({
+                 type: 'success',
+                 text2: response.data.removedskill+" skill removed successfully",
+               });
+                const updatedSkills = skills.filter((s) => s.id !== index);
     setSkills(updatedSkills);
-      //setSkills(updatedSkills);
-      //fetchUserData();
+      }
+     
+     
     } catch (error) {
-      Alert.alert('Error', 'Failed to delete skill');
-      console.error(error);
+     // Alert.alert('Error', 'Failed to delete skill');
+     console.error(error);
+     Toast.show({
+                 type: 'error',
+                 text2: 'Failed to delete skill',
+               });
     }
   };
 
@@ -270,14 +315,14 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.statNumber}>{user.posts}</Text>
             <Text style={styles.statLabel}>Posts</Text>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{user.followers || 0}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
-          </View>
-          <View style={styles.statItem}>
+          <TouchableOpacity style={styles.statItem} onPress={handleFollower}>
+      <Text style={styles.statNumber}>{user.followers || 0}</Text>
+      <Text style={styles.statLabel}>Followers</Text>
+    </TouchableOpacity>
+           <TouchableOpacity style={styles.statItem} onPress={handleFollowing}>
             <Text style={styles.statNumber}>{user.following || 0}</Text>
             <Text style={styles.statLabel}>Following</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Bio */}

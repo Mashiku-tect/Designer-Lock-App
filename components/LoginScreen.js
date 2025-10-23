@@ -20,15 +20,24 @@ export default function LoginScreen({ navigation }) {
         email,
         password,
       });
-     Toast.show({
+      if(res.data.success){
+Toast.show({
          type: 'success',
          text2: res.data.message,
        });
         await login(res.data.token)
+      }
+      else{
+        Toast.show({
+         type: 'warning',
+         text2: res.data.message,
+       });
+      }
+     
       
     } catch (error) {
        const errorMessage = error.response?.data?.message || 'Something went wrong';
-      //Alert.alert('Login Failed', error.response?.data?.message || 'Something went wrong');
+     
       Toast.show({
           type: 'error',
           text2: errorMessage,

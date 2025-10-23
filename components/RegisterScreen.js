@@ -29,10 +29,17 @@ export default function RegisterScreen({ navigation }) {
   const phoneInput = useRef(null);
 
   const handleRegister = async () => {
+    //first check if all inputs are field
+    if(!firstname||!lastname||!email||!phonenumber||!password){
+      Toast.show({ type: 'error', text2: 'Please Fill All Required Fields' });
+      return;
+    }
     if (password !== confirmPassword) {
       Toast.show({ type: 'error', text2: 'Passwords do not match' });
       return;
     }
+
+
 
     // ✅ Validate phone number
     const isValid = phoneInput.current?.isValidNumber(phonenumber);
@@ -50,11 +57,15 @@ export default function RegisterScreen({ navigation }) {
         phonenumber,
         password,
       });
-
-      Toast.show({
+     //check for the returned response
+     if(res.data.success){
+       Toast.show({
         type: 'success',
         text2: res.data.message,
       });
+     }
+    
+     
       navigation.navigate('Login');
     } catch (error) {
       const errorMessage =
@@ -65,6 +76,7 @@ export default function RegisterScreen({ navigation }) {
         type: 'error',
         text2: errorMessage,
       });
+      //console.log("error",errorMessage);
     }
     finally {
       setIsLoading(false); // 👈 stop loading (success or error)

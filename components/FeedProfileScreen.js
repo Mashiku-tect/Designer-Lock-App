@@ -15,12 +15,14 @@ import {
   Platform,
   Linking,
   Alert,
+  RefreshControl,
+  ActivityIndicator
 } from 'react-native';
 import axios from 'axios';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Video } from 'expo-av'; // Import Video component
+import { Video } from 'expo-av';
 import BASE_URL from './Config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -37,11 +39,14 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   const [likedPosts, setLikedPosts] = useState({});
   const verticalFlatListRef = useRef(null);
   const [designerWorks, setDesignerWorks] = useState([]);
-  const videoRefs = useRef({}); // To manage video references
-  const [visiblePosts, setVisiblePosts] = useState(new Set()); // Track visible posts in modal
-  const [visibleGridItems, setVisibleGridItems] = useState(new Set()); // Track visible grid items
+  const videoRefs = useRef({});
+  const [visiblePosts, setVisiblePosts] = useState(new Set());
+  const [visibleGridItems, setVisibleGridItems] = useState(new Set());
   const [designerStats, setDesignerStats] = useState({});
   const [isFollowing, setIsFollowing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   // Function to open WhatsApp
   const openWhatsApp = () => {
@@ -63,94 +68,136 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   };
   
   useEffect(() => {
-    FetchDesignerWorks();
-    fetchDesignerStats();
+    fetchDesignerData();
   }, []);
+
+  const fetchDesignerData = async (isRefreshing = false) => {
+    try {
+      if (isRefreshing) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      await Promise.all([
+        FetchDesignerWorks(),
+        fetchDesignerStats()
+      ]);
+
+    } catch (error) {
+      console.error('Error fetching designer data:', error);
+      setError('Failed to load designer profile. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   // Fetch designer works from designer data on component mount
   const FetchDesignerWorks = async () => {
-  try {
-    const token = await AsyncStorage.getItem('userToken');
-    const response = await axios.get(
-      `${BASE_URL}/api/designers/works/${designer.id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        setError('Please login to view designer works');
+        return;
+      }
+
+      const response = await axios.get(
+        `${BASE_URL}/api/designers/works/${designer.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          timeout: 10000
         }
+      );
+
+      const works = response.data.works;
+      setDesignerWorks(works);
+      setIsFollowing(response.data.hasFollowedThisDesigner);
+      
+      const initialLikedPosts = {};
+      works.forEach(post => {
+        initialLikedPosts[post.id] = post.hasliked || false;
+      });
+      setLikedPosts(initialLikedPosts);
+
+      return response.data;
+
+    } catch (error) {
+      console.error('Error fetching designer works:', error);
+      
+      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
+        setError('Network connection failed. Please check your internet connection.');
+      } else if (error.response?.status === 401) {
+        setError('Session expired. Please login again.');
+      } else if (error.response?.status >= 500) {
+        setError('Server error. Please try again later.');
+      } else {
+        setError('Failed to load designer works. Please try again.');
       }
-    );
-
-    const works = response.data.works;
-    setDesignerWorks(works);
-    //console.log("Designer Works", works);
-    //console.log("hasfollowed this designer",response.data.hasFollowedThisDesigner)
-    setIsFollowing(response.data.hasFollowedThisDesigner);
-    
-    const initialLikedPosts = {};
-    works.forEach(post => {
-      initialLikedPosts[post.id] = post.hasliked || false;
-    });
-    setLikedPosts(initialLikedPosts);
-
-    return response.data;
-
-  } catch (error) {
-    console.error('Error fetching designer works:', error);
-  }
-};
-
-
-  //fetct designer stats
-  const fetchDesignerStats = async () => {
-  try {
-    const token = await AsyncStorage.getItem('userToken');
-    const response = await axios.get(`${BASE_URL}/api/designers/stats/${designer.id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      }
-    });
-
-    const stats = response.data;
-    setDesignerStats(stats);
-    //console.log('Designer Stats:', stats);
-    return stats;
-
-  } catch (error) {
-    console.error('Failed to fetch designer stats:', error);
-    return null;
-  }
-};
-
-const FollowDesigner = async (designerId) => {
-  //console.log("Toggling follow for designer ID:", designerId);
-  try {
-    const token = await AsyncStorage.getItem('userToken');
-    const response = await axios.post(
-      `${BASE_URL}/api/designers/toggle-follow/${designerId}`,
-      {},
-      {
-
-        headers: {
-
-          Authorization: `Bearer ${token}`,
-        }
-      }
-    );
-    if (response.data.isFollowing !== undefined) {
-      setIsFollowing(response.data.isFollowing);
-      //console.log("Following Data", response.data.isFollowing);
-         setDesignerStats(prevStats => ({
-        ...prevStats,
-        followers: response.data.isFollowing
-          ? prevStats.followers + 1
-          : Math.max(prevStats.followers - 1, 0) // ensure it doesn’t go below 0
-      }));
+      throw error;
     }
-  } catch (error) {
-    console.error('Error following/unfollowing designer:', error);
-    Alert.alert('Error', 'Failed to follow/unfollow designer. Please try again.');
-  }
-};
+  };
+
+  //fetch designer stats
+  const fetchDesignerStats = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        return null;
+      }
+
+      const response = await axios.get(`${BASE_URL}/api/designers/stats/${designer.id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 10000
+      });
+
+      const stats = response.data;
+      setDesignerStats(stats);
+      return stats;
+
+    } catch (error) {
+      console.error('Failed to fetch designer stats:', error);
+      return null;
+    }
+  };
+
+  const FollowDesigner = async (designerId) => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        Alert.alert('Error', 'Please login to follow designers');
+        return;
+      }
+
+      const response = await axios.post(
+        `${BASE_URL}/api/designers/toggle-follow/${designerId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          }
+        }
+      );
+      
+      if (response.data.isFollowing !== undefined) {
+        setIsFollowing(response.data.isFollowing);
+        setDesignerStats(prevStats => ({
+          ...prevStats,
+          followers: response.data.isFollowing
+            ? prevStats.followers + 1
+            : Math.max(prevStats.followers - 1, 0)
+        }));
+      }
+    } catch (error) {
+      console.error('Error following/unfollowing designer:', error);
+      Alert.alert('Error', 'Failed to follow/unfollow designer. Please try again.');
+    }
+  };
 
   // Pause all videos
   const pauseAllVideos = () => {
@@ -171,20 +218,16 @@ const FollowDesigner = async (designerId) => {
 
   // Handle viewable items change for vertical scrolling in modal
   const onVerticalViewableItemsChanged = useRef(({ viewableItems }) => {
-    // Pause all videos first
     pauseAllVideos();
     
-    // Get the currently visible post IDs in modal
     const newVisiblePosts = new Set(viewableItems.map(item => item.key));
     setVisiblePosts(newVisiblePosts);
     
-    // Auto-play videos for the first visible post in modal
     if (viewableItems.length > 0) {
       const firstVisibleItem = viewableItems[0];
       const postId = firstVisibleItem.key;
       const activeIndex = activeImageIndex;
       
-      // Check if the active item in this post is a video
       const post = designerWorks.find(p => p.id === postId);
       if (post && post.images[activeIndex]) {
         const isVideo = isVideoFile(post.images[activeIndex]);
@@ -196,8 +239,8 @@ const FollowDesigner = async (designerId) => {
   }).current;
 
   const verticalViewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 70, // Consider item visible when 70% is on screen in modal
-    minimumViewTime: 150, // Minimum time in ms to consider item visible
+    itemVisiblePercentThreshold: 70,
+    minimumViewTime: 150,
   }).current;
 
   const formatDate = (timestamp) => {
@@ -223,7 +266,6 @@ const FollowDesigner = async (designerId) => {
   };
 
   const openPost = (post, index) => {
-    // Pause all videos when opening a new post
     pauseAllVideos();
 
     setSelectedPost(post);
@@ -240,7 +282,6 @@ const FollowDesigner = async (designerId) => {
   };
 
   const closePost = () => {
-    // Pause all videos when closing modal
     pauseAllVideos();
     
     setPostModalVisible(false);
@@ -261,88 +302,86 @@ const FollowDesigner = async (designerId) => {
   };
 
   const toggleLike = async (postId) => {
-  try {
-    const userToken = await AsyncStorage.getItem('userToken');
-    if (!userToken) {
-      console.error('No token found');
-      return;
-    }
-
-    const currentLikedStatus = likedPosts[postId];
-    const currentPost = designerWorks.find(post => post.id === postId);
-    
-    // Use consistent property name - check both possibilities
-    const currentLikesCount = currentPost?.likes || currentPost?.likesCount || 0;
-
-    // Optimistic update
-    setLikedPosts(prev => ({
-      ...prev,
-      [postId]: !prev[postId]
-    }));
-
-    setDesignerWorks(prevData => 
-      prevData.map(post => 
-        post.id === postId 
-          ? {
-              ...post,
-              likes: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
-            }
-          : post
-      )
-    );
-
-    const response = await axios.post(
-      `${BASE_URL}/api/posts/toggle-like/${postId}`,
-      {},
-      {
-        headers: {
-          'Authorization': `Bearer ${userToken}`,
-          'Content-Type': 'application/json',
-        },
+    try {
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken) {
+        Alert.alert('Error', 'Please login to like posts');
+        return;
       }
-    );
 
-    // Update with server response using consistent property name
-    if (response.data.updatedLikesCount !== undefined) {
+      const currentLikedStatus = likedPosts[postId];
+      const currentPost = designerWorks.find(post => post.id === postId);
+      
+      const currentLikesCount = currentPost?.likes || currentPost?.likesCount || 0;
+
+      // Optimistic update
+      setLikedPosts(prev => ({
+        ...prev,
+        [postId]: !prev[postId]
+      }));
+
       setDesignerWorks(prevData => 
         prevData.map(post => 
           post.id === postId 
             ? {
                 ...post,
-                likes: response.data.updatedLikesCount
+                likes: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
               }
             : post
         )
       );
+
+      const response = await axios.post(
+        `${BASE_URL}/api/posts/toggle-like/${postId}`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.data.updatedLikesCount !== undefined) {
+        setDesignerWorks(prevData => 
+          prevData.map(post => 
+            post.id === postId 
+              ? {
+                  ...post,
+                  likes: response.data.updatedLikesCount
+                }
+              : post
+          )
+        );
+      }
+
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      
+      // Revert on error
+      const currentPost = designerWorks.find(post => post.id === postId);
+      const currentLikesCount = currentPost?.likes || currentPost?.likesCount || 0;
+      const currentLikedStatus = likedPosts[postId];
+
+      setLikedPosts(prev => ({
+        ...prev,
+        [postId]: !prev[postId]
+      }));
+
+      setDesignerWorks(prevData => 
+        prevData.map(post => 
+          post.id === postId 
+            ? {
+                ...post,
+                likes: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
+              }
+            : post
+        )
+      );
+
+      Alert.alert('Error', 'Failed to update like. Please try again.');
     }
-
-  } catch (error) {
-    console.error('Error toggling like:', error);
-    
-    // Revert on error
-    const currentPost = designerWorks.find(post => post.id === postId);
-    const currentLikesCount = currentPost?.likes || currentPost?.likesCount || 0;
-    const currentLikedStatus = likedPosts[postId];
-
-    setLikedPosts(prev => ({
-      ...prev,
-      [postId]: !prev[postId]
-    }));
-
-    setDesignerWorks(prevData => 
-      prevData.map(post => 
-        post.id === postId 
-          ? {
-              ...post,
-              likes: currentLikedStatus ? currentLikesCount - 1 : currentLikesCount + 1
-            }
-          : post
-      )
-    );
-
-    Alert.alert('Error', 'Failed to update like. Please try again.');
-  }
-};
+  };
 
   const addComment = async () => {
     if (newComment.trim() === '' || !selectedPost) return;
@@ -350,7 +389,7 @@ const FollowDesigner = async (designerId) => {
     try {
       const userToken = await AsyncStorage.getItem('userToken');
       if (!userToken) {
-        console.error('No token available');
+        Alert.alert('Error', 'Please login to comment');
         return;
       }
 
@@ -448,12 +487,10 @@ const FollowDesigner = async (designerId) => {
   };
 
   const updateActiveImageIndex = (postId, index) => {
-    // Pause all videos when swiping to new media item
     pauseAllVideos();
 
     setActiveImageIndex(index);
 
-    // If this post is currently visible in modal, play the new active video
     if (visiblePosts.has(postId)) {
       const post = designerWorks.find(p => p.id === postId);
       if (post && post.images[index]) {
@@ -464,6 +501,45 @@ const FollowDesigner = async (designerId) => {
       }
     }
   };
+
+  // Render empty state for no works
+  const renderEmptyWorks = () => (
+    <View style={styles.emptyContainer}>
+      <Icon name="photo-library" size={80} color="#E0E0E0" />
+      <Text style={styles.emptyTitle}>No Works Published</Text>
+      <Text style={styles.emptySubtitle}>
+        {designer.name} hasn't published any design works yet.
+      </Text>
+      <Text style={styles.emptyHint}>
+        Check back later to see their amazing designs!
+      </Text>
+    </View>
+  );
+
+  // Render error state
+  const renderErrorState = () => (
+    <View style={styles.emptyContainer}>
+      <Icon name="error-outline" size={80} color="#FF6B6B" />
+      <Text style={styles.emptyTitle}>Unable to Load Profile</Text>
+      <Text style={styles.emptySubtitle}>
+        {error}
+      </Text>
+      <TouchableOpacity 
+        style={styles.retryButton} 
+        onPress={() => fetchDesignerData()}
+      >
+        <Text style={styles.retryButtonText}>Try Again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Render loading state
+  const renderLoading = () => (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#4a6bff" />
+      <Text style={styles.loadingText}>Loading designer profile...</Text>
+    </View>
+  );
 
   const renderMediaItem = ({ item, index, postId }) => {
     const isVideo = isVideoFile(item);
@@ -479,12 +555,9 @@ const FollowDesigner = async (designerId) => {
               source={{ uri: item }}
               style={styles.video}
               resizeMode="cover"
-              shouldPlay={isPostVisible && isActiveItem} // Auto-play only when post is visible and this is active item
+              shouldPlay={isPostVisible && isActiveItem}
               isLooping
               useNativeControls
-              onPlaybackStatusUpdate={(status) => {
-                // Optional: Handle playback status updates if needed
-              }}
             />
             {!isPostVisible && (
               <TouchableOpacity 
@@ -518,11 +591,10 @@ const FollowDesigner = async (designerId) => {
 
   const renderGridItem = ({ item, index }) => {
     const isLiked = likedPosts[item.id];
-  // Use consistent property name - check both possibilities
-  const likesCount = item.likes || item.likesCount || 0;
-  const displayLikes = likesCount;
-  const firstMedia = item.images[0];
-  const isVideo = isVideoFile(firstMedia);
+    const likesCount = item.likes || item.likesCount || 0;
+    const displayLikes = likesCount;
+    const firstMedia = item.images[0];
+    const isVideo = isVideoFile(firstMedia);
 
     return (
       <TouchableOpacity 
@@ -602,12 +674,11 @@ const FollowDesigner = async (designerId) => {
   );
 
   const renderVerticalPost = ({ item, index }) => {
-     const isLiked = likedPosts[item.id];
-  const hasliked = item.hasliked;
-  // Use consistent property name - check both possibilities
-  const likesCount = item.likes || item.likesCount || 0;
-  const displayLikes = likesCount;
-  const comments = item.comments || [];
+    const isLiked = likedPosts[item.id];
+    const hasliked = item.hasliked;
+    const likesCount = item.likes || item.likesCount || 0;
+    const displayLikes = likesCount;
+    const comments = item.comments || [];
 
     return (
       <View style={styles.verticalPostContainer}>
@@ -686,9 +757,6 @@ const FollowDesigner = async (designerId) => {
             >
               <Icon name="chat-bubble-outline" size={24} color="#666" />
             </TouchableOpacity>
-            {/* <TouchableOpacity style={styles.postActionButton}>
-              <Icon name="share" size={24} color="#666" />
-            </TouchableOpacity> */}
           </View>
           <TouchableOpacity style={styles.postActionButton}>
             <Icon name="bookmark-border" size={24} color="#666" />
@@ -747,19 +815,36 @@ const FollowDesigner = async (designerId) => {
     );
   };
 
-  const renderStatsItem = ({ item }) => (
-    <View style={styles.statItem}>
-      <Text style={styles.statNumber}>{item.value}</Text>
-      <Text style={styles.statLabel}>{item.label}</Text>
-    </View>
-  );
-
   const statsData = [
-    { label: 'Works', value: designerStats.works },
-    { label: 'Followers', value: designerStats.followers },
-    { label: 'Following', value: designerStats.following },
-    { label: 'Likes', value: designerStats.likes },
+    { label: 'Works', value: designerStats.works || 0 },
+    { label: 'Followers', value: designerStats.followers || 0 },
+    { label: 'Following', value: designerStats.following || 0 },
+    { label: 'Likes', value: designerStats.likes || 0 },
   ];
+
+  if (loading) {
+    return renderLoading();
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={24} color="#4a6bff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Designer Profile</Text>
+          <TouchableOpacity style={styles.menuButton}>
+            <Icon name="more-vert" size={24} color="#4a6bff" />
+          </TouchableOpacity>
+        </View>
+        {renderErrorState()}
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -769,7 +854,7 @@ const FollowDesigner = async (designerId) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-         <Ionicons name="chevron-back" size={24} color="#4a6bff" />
+          <Ionicons name="chevron-back" size={24} color="#4a6bff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Designer Profile</Text>
         <TouchableOpacity style={styles.menuButton}>
@@ -780,6 +865,14 @@ const FollowDesigner = async (designerId) => {
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchDesignerData(true)}
+            colors={['#4a6bff']}
+            tintColor="#4a6bff"
+          />
+        }
       >
         {/* Profile Header */}
         <View style={styles.profileHeader}>
@@ -796,7 +889,7 @@ const FollowDesigner = async (designerId) => {
           <Text style={styles.profileName}>{designer.name}</Text>
           <Text style={styles.profileRole}>{designer.bio}</Text>
           <Text style={styles.profileBio}>
-           {designer.professionalsummary}
+            {designer.professionalsummary}
           </Text>
 
           {/* Stats */}
@@ -812,11 +905,11 @@ const FollowDesigner = async (designerId) => {
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
             <TouchableOpacity 
-  style={styles.followButton} 
-  onPress={() => FollowDesigner(designer.id)} // Pass your parameter here
->
-  <Text style={styles.followButtonText}>{isFollowing ? 'Unfollow' : 'Follow'}</Text>
-</TouchableOpacity>
+              style={styles.followButton} 
+              onPress={() => FollowDesigner(designer.id)}
+            >
+              <Text style={styles.followButtonText}>{isFollowing ? 'Unfollow' : 'Follow'}</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity 
               style={styles.messageButton}
@@ -846,15 +939,19 @@ const FollowDesigner = async (designerId) => {
 
         {/* Works Grid - Instagram Style */}
         {activeTab === 'works' && (
-          <FlatList
-            data={designerWorks}
-            renderItem={renderGridItem}
-            keyExtractor={item => item.id}
-            numColumns={3}
-            scrollEnabled={false}
-            contentContainerStyle={styles.worksGrid}
-            showsVerticalScrollIndicator={false}
-          />
+          designerWorks.length > 0 ? (
+            <FlatList
+              data={designerWorks}
+              renderItem={renderGridItem}
+              keyExtractor={item => item.id}
+              numColumns={3}
+              scrollEnabled={false}
+              contentContainerStyle={styles.worksGrid}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            renderEmptyWorks()
+          )
         )}
 
         {/* About Tab Content */}
@@ -864,32 +961,31 @@ const FollowDesigner = async (designerId) => {
               <Text style={styles.sectionTitle}>Information</Text>
               <View style={styles.infoItem}>
                 <Icon name="location-on" size={20} color="#666" />
-                <Text style={styles.infoText}>{designer.location}</Text>
+                <Text style={styles.infoText}>{designer.location || 'Not specified'}</Text>
               </View>
               <View style={styles.infoItem}>
                 <Icon name="work" size={20} color="#666" />
-                <Text style={styles.infoText}>{designer.work}</Text>
+                <Text style={styles.infoText}>{designer.work || 'Not specified'}</Text>
               </View>
               <View style={styles.infoItem}>
                 <Icon name="school" size={20} color="#666" />
-                <Text style={styles.infoText}>{designer.education}</Text>
+                <Text style={styles.infoText}>{designer.education || 'Not specified'}</Text>
               </View>
             </View>
 
             <View style={styles.skillsSection}>
               <Text style={styles.sectionTitle}>Skills & Expertise</Text>
-             <View style={styles.skillsContainer}>
-  {designerStats.skills && designerStats.skills.length > 0 ? (
-    designerStats.skills.map((skill) => (
-      <View key={skill} style={styles.skillTag}>
-        <Text style={styles.skillText}>{skill}</Text>
-      </View>
-    ))
-  ) : (
-    <Text style={styles.noSkillsText}>No skills added yet</Text>
-  )}
-</View>
-
+              <View style={styles.skillsContainer}>
+                {designerStats.skills && designerStats.skills.length > 0 ? (
+                  designerStats.skills.map((skill) => (
+                    <View key={skill} style={styles.skillTag}>
+                      <Text style={styles.skillText}>{skill}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noSkillsText}>No skills added yet</Text>
+                )}
+              </View>
             </View>
           </View>
         )}
@@ -1584,7 +1680,58 @@ const styles = StyleSheet.create({
   color: '#888',
   textAlign: 'center',
   marginTop: 10,
-}
+},
+emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  emptyHint: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  retryButton: {
+    marginTop: 20,
+    backgroundColor: '#4a6bff',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+
 
 });
 

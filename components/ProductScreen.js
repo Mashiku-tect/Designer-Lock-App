@@ -8,7 +8,7 @@ import { ActivityIndicator } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { Video } from 'expo-av';
-
+import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,7 +22,56 @@ const ProductScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const videoRefs = useRef([]);
+
+  // Validate phone number format
+  const validatePhoneNumber = (number) => {
+    const cleanedNumber = number.trim();
+    
+    // Check if it starts with 255
+    if (!cleanedNumber.startsWith('255')) {
+      return 'Phone number must start with 255';
+    }
+    
+    // Check total length (255 + 9 digits = 12 characters)
+    if (cleanedNumber.length !== 12) {
+      return 'Phone number must be 12 digits (255 followed by 9 digits)';
+    }
+    
+    // Check if all characters after 255 are digits
+    const digitsAfterPrefix = cleanedNumber.substring(3);
+    if (!/^\d+$/.test(digitsAfterPrefix)) {
+      return 'Phone number must contain only digits after 255';
+    }
+    
+    // Check if the digits after 255 are valid (should be 9 digits starting with 6-9)
+    const operatorCode = digitsAfterPrefix.substring(0, 2);
+    const validOperatorCodes = ['61', '62', '63', '64', '65', '66', '67', '68', '69', '71', '72', '73', '74', '75', '76', '77', '78', '79'];
+    
+    if (!validOperatorCodes.includes(operatorCode)) {
+      return 'Invalid Tanzanian phone number format';
+    }
+    
+    return ''; // No error
+  };
+
+  // Handle phone number input change
+  const handlePhoneNumberChange = (text) => {
+    setPhoneNumber(text);
+    
+    // Clear error when user starts typing
+    if (phoneError) {
+      setPhoneError('');
+    }
+    
+    // Auto-format: ensure it starts with 255
+    if (text.length === 1 && !text.startsWith('255')) {
+      if (text === '0') {
+        setPhoneNumber('255');
+      }
+    }
+  };
 
   // Fetch product price on components mount
   useEffect(() => {
@@ -102,15 +151,19 @@ const ProductScreen = ({ route, navigation }) => {
   // Show phone number modal before payment
   const initiatePayment = () => {
     setPhoneModalVisible(true);
+    setPhoneError('');
+    setPhoneNumber('');
   };
 
   // Handle payment for ALL images
   const handlePayment = async () => {
-    if (!phoneNumber.trim()) {
-      Alert.alert('Error', 'Please enter your phone number');
+    // Validate phone number format before proceeding
+    const validationError = validatePhoneNumber(phoneNumber);
+    if (validationError) {
+      setPhoneError(validationError);
       return;
     }
-    
+
     setPhoneModalVisible(false);
     setIsProcessing(true);
     
@@ -130,40 +183,41 @@ const ProductScreen = ({ route, navigation }) => {
         }
       });
       if (response.data.success) {
-        //setIsPaid(true);
-        Alert.alert('Your Payment is Processed please hang on a while....');
-      } else {
-        Alert.alert('Payment Failed', 'Please try again.');
-      }
+        
+        Toast.show({
+                 type: 'success',
+                 text2: response.data.message
+               });
+      } 
     }  catch (err) {
-  console.error('Payment request failed');
+  //console.error('Payment request failed');
 
   if (err.response) {
-    // The request was made and the server responded with a non-2xx status
-    console.error('Response data:', err.response.data);
-    console.error('Response status:', err.response.status);
-    console.error('Response headers:', err.response.headers);
-
-    Alert.alert(
-      'Payment Error',
-      err.response.data.message || 'Server responded with an error'
-    );
+    Toast.show({
+                 type: 'error',
+                 text2: err.response?.data?.message
+               });
   } else if (err.request) {
     // The request was made but no response was received
-    console.error('No response received:', err.request);
+      Toast.show({
+                 type: 'error',
+                 text2: 'No response from server. Check your internet connection.'
+               });
+   
 
-    Alert.alert(
-      'Network Error',
-      'No response from server. Check your internet connection.'
-    );
+   
   } else {
-    // Something else happened in setting up the request
-    console.error('Error Message:', err.message);
+    // // Something else happened in setting up the request
+    // console.error('Error Message:', err.message);
 
-    Alert.alert('Error', err.message);
+    // Alert.alert('Error', err.message);
+     Toast.show({
+                 type: 'error',
+                 text2: 'Something went Wrong,Try Again Later'
+               });
   }
 
-  console.error('Full Error:', err);
+ // console.error('Full Error:', err);
 }
  finally {
       setIsProcessing(false);
@@ -392,13 +446,24 @@ const renderItem = ({ item,index }) => {
             <Text style={styles.modalSubtitle}>We need your phone number to process the payment</Text>
             
             <TextInput
-              style={styles.phoneInput}
-              placeholder="e.g., 0712345678"
+              style={[styles.phoneInput, phoneError && styles.phoneInputError]}
+              placeholder="e.g., 255712345678"
               keyboardType="phone-pad"
               value={phoneNumber}
-              onChangeText={setPhoneNumber}
+              onChangeText={handlePhoneNumberChange}
               autoFocus={true}
+              maxLength={12}
             />
+            
+            {phoneError ? (
+              <Text style={styles.errorText}>
+                <Ionicons name="warning" size={14} color="#ff3b30" /> {phoneError}
+              </Text>
+            ) : (
+              <Text style={styles.helperText}>
+                Format: 255 followed by 9 digits (e.g., 255712345678)
+              </Text>
+            )}
             
             <Text style={styles.chargesNoteModal}>
               <Ionicons name="information-circle" size={16} color="#666" />
@@ -414,8 +479,9 @@ const renderItem = ({ item,index }) => {
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton]}
+                style={[styles.modalButton, styles.confirmButton, phoneError && styles.disabledConfirmButton]}
                 onPress={handlePayment}
+                disabled={!!phoneError}
               >
                 <Text style={styles.confirmButtonText}>Pay Now</Text>
               </TouchableOpacity>
@@ -706,5 +772,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+   phoneInputError: {
+    borderColor: '#ff3b30',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#ff3b30',
+    fontSize: 12,
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  helperText: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  disabledConfirmButton: {
+    backgroundColor: '#cccccc',
   },
 });

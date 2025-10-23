@@ -20,6 +20,7 @@ import InboxScreen from "./components/InboxScreen";
 import EditOrderScreen from "./components/EditOrderScreen";
 import FeedProfileScreen from "./components/FeedProfileScreen";
 import VideoUploadScreen from "./components/VideoScreen";
+import FollowingFollower from './components/followersfollowingscreen';
 
 import { AuthProvider, AuthContext } from "./AuthContext";
 
@@ -65,6 +66,8 @@ const AppStack = () => (
     <Stack.Screen name="Product" component={ProductScreen} />
     <Stack.Screen name="Inbox" component={InboxScreen} />
     <Stack.Screen name="EditOrderScreen" component={EditOrderScreen} />
+    <Stack.Screen name="followerfollowingscreen" component={FollowingFollower} />
+
   </Stack.Navigator>
 );
 

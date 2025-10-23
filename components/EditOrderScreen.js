@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -7,18 +7,28 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import BASE_URL from './Config';
 import Toast from 'react-native-toast-message';
+import PhoneInput from 'react-native-phone-number-input';
 
 export default function EditOrderScreen({ route, navigation }) {
   const { order, onGoBack } = route.params;
+  
+  // Function to remove +255 prefix from phone number
+  const formatPhoneNumber = (phoneNumber) => {
+    if (!phoneNumber) return '';
+    // Remove "+255" prefix if present
+    return phoneNumber.replace(/^\+255/, '');
+  };
+
   const [formData, setFormData] = useState({
     clientName: order.clientname || '',
-    contactNumber: order.clientphonenumber || '',
+    contactNumber: formatPhoneNumber(order.clientphonenumber) || '', // Apply formatting here
     designTitle: order.designtitle || '',
     price: order.price ? order.price.toString() : '',
   });
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [existingFiles, setExistingFiles] = useState(order.files || []);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const phoneInputRef = useRef(null);
 
   useEffect(() => {
     navigation.setOptions({
@@ -39,20 +49,27 @@ export default function EditOrderScreen({ route, navigation }) {
     if (isSubmitting) return;
 
     if (!formData.clientName || !formData.designTitle || !formData.price) {
-      //Alert.alert('Required Fields', 'Please fill in all required fields');
       Toast.show({
-               type: 'error',
-               text2: 'Please fill in all required fields',
-             });
+        type: 'error',
+        text2: 'Please fill in all required fields',
+      });
       return;
     }
 
-    if(formData.price<500){
+    if (!phoneInputRef.current?.isValidNumber(formData.contactNumber)) {
       Toast.show({
-               type: 'info',
-               text2: 'Price Must Be At Least 500',
-             });
-             return;
+        type: 'error',
+        text2: 'Invalid phone number',
+      });
+      return;
+    }
+
+    if(formData.price < 500){
+      Toast.show({
+        type: 'info',
+        text2: 'Price Must Be At Least 500',
+      });
+      return;
     }
 
     setIsSubmitting(true);
@@ -83,17 +100,19 @@ export default function EditOrderScreen({ route, navigation }) {
         });
       });
 
-      const response = await fetch(`${BASE_URL}/api/orders/${order.product_id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formDataWithFiles,
-      });
+      // Using axios instead of fetch
+      const response = await axios.put(
+        `${BASE_URL}/api/orders/${order.product_id}`,
+        formDataWithFiles,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
 
-      const data = await response.json();
-      if (response.ok) {
+      if (response.status === 200) {
         Toast.show({
           type: 'success',
           text2: 'Order updated successfully',
@@ -103,80 +122,83 @@ export default function EditOrderScreen({ route, navigation }) {
       } else {
         Toast.show({
           type: 'error',
-          text2: `Failed to update order: ${data.message}`,
+          text2: `Failed to update order: ${response.data.message}`,
         });
       }
     } catch (error) {
+      // Handle axios error response
+      const errorMessage = error.response?.data?.message 
+        ? `Failed to update order: ${error.response.data.message}`
+        : 'An error occurred. Please try again';
+      
       Toast.show({
         type: 'error',
-        text2: 'An error occurred. Please try again',
+        text2: errorMessage,
       });
-      console.error('Update error:', error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-const handleUpload = async () => {
-  try {
-    let result;
-    if (Platform.OS === 'web') {
-      // Web: allow both image and video files
-      result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'video/*'],
-        copyToCacheDirectory: false,
-        multiple: true,
-      });
-
-      if (result.type === 'success' && result.assets) {
-        const validFiles = result.assets.filter(
-          file =>
-            file.mimeType.startsWith('image/') ||
-            file.mimeType.startsWith('video/')
-        );
-        setUploadedFiles(prev => [...prev, ...validFiles]);
-      }
-    } else {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Toast.show({
-          type: 'info',
-          text2: 'We need access to your media library to upload files.',
+  const handleUpload = async () => {
+    try {
+      let result;
+      if (Platform.OS === 'web') {
+        // Web: allow both image and video files
+        result = await DocumentPicker.getDocumentAsync({
+          type: ['image/*', 'video/*'],
+          copyToCacheDirectory: false,
+          multiple: true,
         });
-        return;
-      }
 
-      result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All, // ✅ allow both images and videos
-        allowsEditing: false,
-        allowsMultipleSelection: true,
-        quality: 1,
-      });
+        if (result.type === 'success' && result.assets) {
+          const validFiles = result.assets.filter(
+            file =>
+              file.mimeType.startsWith('image/') ||
+              file.mimeType.startsWith('video/')
+          );
+          setUploadedFiles(prev => [...prev, ...validFiles]);
+        }
+      } else {
+        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+          Toast.show({
+            type: 'info',
+            text2: 'We need access to your media library to upload files.',
+          });
+          return;
+        }
 
-      if (!result.canceled && result.assets) {
-        const validFiles = result.assets.filter(asset => {
-          const isImage =
-            asset.uri.endsWith('.png') ||
-            asset.uri.endsWith('.jpg') ||
-            asset.uri.endsWith('.jpeg');
-          const isVideo =
-            asset.uri.endsWith('.mp4') ||
-            asset.uri.endsWith('.mov') ||
-            asset.uri.endsWith('.avi');
-          return isImage || isVideo;
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.All, // ✅ allow both images and videos
+          allowsEditing: false,
+          allowsMultipleSelection: true,
+          quality: 1,
         });
-        setUploadedFiles(prev => [...prev, ...validFiles]);
+
+        if (!result.canceled && result.assets) {
+          const validFiles = result.assets.filter(asset => {
+            const isImage =
+              asset.uri.endsWith('.png') ||
+              asset.uri.endsWith('.jpg') ||
+              asset.uri.endsWith('.jpeg');
+            const isVideo =
+              asset.uri.endsWith('.mp4') ||
+              asset.uri.endsWith('.mov') ||
+              asset.uri.endsWith('.avi');
+            return isImage || isVideo;
+          });
+          setUploadedFiles(prev => [...prev, ...validFiles]);
+        }
       }
+    } catch (error) {
+      console.error(error);
+      Toast.show({
+        type: 'error',
+        text2: 'Error uploading files. Please try again',
+      });
     }
-  } catch (error) {
-    console.error(error);
-    Toast.show({
-      type: 'error',
-      text2: 'Error uploading files. Please try again',
-    });
-  }
-};
-
+  };
 
   const removeFile = (index, isExisting = false) => {
     if (isExisting) {
@@ -187,43 +209,42 @@ const handleUpload = async () => {
     }
   };
 
- const renderFileItem = (file, index, isExisting = false) => {
-  const fileName = isExisting
-    ? file.filename || file.path?.split('/').pop()
-    : file.name || file.fileName || file.uri.split('/').pop();
+  const renderFileItem = (file, index, isExisting = false) => {
+    const fileName = isExisting
+      ? file.filename || file.path?.split('/').pop()
+      : file.name || file.fileName || file.uri.split('/').pop();
 
-  const fileUri = isExisting
-    ? { uri: `${BASE_URL}/${file.path?.replace(/\\/g, '/')}` }
-    : { uri: file.uri };
+    const fileUri = isExisting
+      ? { uri: `${BASE_URL}/${file.path?.replace(/\\/g, '/')}` }
+      : { uri: file.uri };
 
-  const isVideo =
-    fileUri.uri?.endsWith('.mp4') ||
-    fileUri.uri?.endsWith('.mov') ||
-    fileUri.uri?.endsWith('.avi');
+    const isVideo =
+      fileUri.uri?.endsWith('.mp4') ||
+      fileUri.uri?.endsWith('.mov') ||
+      fileUri.uri?.endsWith('.avi');
 
-  return (
-    <View
-      key={`file-${index}-${isExisting ? 'existing' : 'new'}`}
-      style={styles.fileItem}
-    >
-      <Ionicons
-        name={isVideo ? 'videocam' : 'image'}
-        size={20}
-        color={isVideo ? '#ff9500' : '#4a6bff'}
-      />
-      <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
-        {fileName}
-      </Text>
-      <TouchableOpacity
-        onPress={() => removeFile(index, isExisting)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    return (
+      <View
+        key={`file-${index}-${isExisting ? 'existing' : 'new'}`}
+        style={styles.fileItem}
       >
-        <Ionicons name="close-circle" size={20} color="#ff4a4a" />
-      </TouchableOpacity>
-    </View>
-  );
-};
-
+        <Ionicons
+          name={isVideo ? 'videocam' : 'image'}
+          size={20}
+          color={isVideo ? '#ff9500' : '#4a6bff'}
+        />
+        <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
+          {fileName}
+        </Text>
+        <TouchableOpacity
+          onPress={() => removeFile(index, isExisting)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="close-circle" size={20} color="#ff4a4a" />
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -254,7 +275,7 @@ const handleUpload = async () => {
             <Text style={styles.inputLabel}>Client Name *</Text>
             <TextInput
               style={styles.input}
-              placeholder="John Doe"
+              placeholder="Enter Client Name"
               placeholderTextColor="#999"
               value={formData.clientName}
               onChangeText={(text) => setFormData({...formData, clientName: text})}
@@ -263,15 +284,26 @@ const handleUpload = async () => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Contact Number</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="+255 123 456 789"
-              placeholderTextColor="#999"
-              keyboardType="phone-pad"
-              value={formData.contactNumber}
-              onChangeText={(text) => setFormData({...formData, contactNumber: text})}
-              returnKeyType="next"
+            <Text style={styles.inputLabel}>Contact Number *</Text>
+            <PhoneInput
+              ref={phoneInputRef}
+              defaultValue={formData.contactNumber}
+              defaultCode="TZ"
+              layout="first"
+              containerStyle={styles.phoneInputContainer}
+              textContainerStyle={styles.phoneTextContainer}
+              textInputStyle={styles.phoneTextInput}
+              codeTextStyle={styles.phoneCodeText}
+              flagButtonStyle={styles.phoneFlagButton}
+              textInputProps={{
+                placeholder: 'Enter phone number',
+                placeholderTextColor: '#999',
+                keyboardType: 'phone-pad',
+                returnKeyType: 'next',
+              }}
+              onChangeFormattedText={(text) =>
+                setFormData({ ...formData, contactNumber: text })
+              }
             />
           </View>
         </View>
@@ -349,7 +381,7 @@ const handleUpload = async () => {
             (!formData.clientName || !formData.designTitle || !formData.price) && styles.disabledButton
           ]}
           onPress={handleUpdateOrder}
-          disabled={!formData.clientName || !formData.designTitle || !formData.price ||   isSubmitting}
+          disabled={!formData.clientName || !formData.designTitle || !formData.price || isSubmitting}
           activeOpacity={0.7}
         >
           <Text style={styles.submitButtonText}>
@@ -441,6 +473,36 @@ const styles = StyleSheet.create({
     borderColor: '#e1e1e1',
     fontSize: 16,
     color: '#333',
+  },
+  // Phone Input Styles
+  phoneInputContainer: {
+    width: '100%',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+    height: 52,
+  },
+  phoneTextContainer: {
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    height: 50,
+  },
+  phoneTextInput: {
+    height: 50,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: 'transparent',
+  },
+  phoneCodeText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  phoneFlagButton: {
+    width: 60,
+    borderRightWidth: 1,
+    borderRightColor: '#e1e1e1',
+    marginRight: 8,
   },
   uploadButton: {
     borderWidth: 2,

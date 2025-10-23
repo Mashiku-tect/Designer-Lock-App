@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,8 @@ import * as Clipboard from 'expo-clipboard';
 import BASE_URL from './Config';
 import Toast from 'react-native-toast-message';
 import { Video } from 'expo-av';
+import axios from 'axios';
+import PhoneInput from 'react-native-phone-number-input';
 
 export default function NewOrderScreen({ navigation }) {
   const [formData, setFormData] = useState({
@@ -20,11 +22,12 @@ export default function NewOrderScreen({ navigation }) {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [productId, setProductId] = useState(null); // New state for product ID
+  const phoneInput = useRef(null);
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
 
-    if (!formData.clientName || !formData.designTitle || !formData.price) {
+    if (!formData.clientName || !formData.designTitle || !formData.price || !formData.contactNumber) {
      // Alert.alert('Required Fields', 'Please fill in all required fields');
      Toast.show({
          type: 'error',
@@ -32,6 +35,15 @@ export default function NewOrderScreen({ navigation }) {
        });
       return;
     }
+    //Validate Phone Number
+    if (!phoneInput.current?.isValidNumber(formData.contactNumber)) {
+  Toast.show({
+    type: 'error',
+    text2: 'Invalid phone number',
+  });
+  return;
+}
+
 
     if(formData.price<1000){
       Toast.show({
@@ -71,32 +83,28 @@ export default function NewOrderScreen({ navigation }) {
         });
       });
 
-      const response = await fetch(`${BASE_URL}/api/orders/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formDataWithFiles,
-      });
+      const response = await axios.post(`${BASE_URL}/api/orders/`, formDataWithFiles, {
+  headers: {
+    'Content-Type': 'multipart/form-data',
+    'Authorization': `Bearer ${token}`,
+  },
+});
 
-      const data = await response.json();
-      if (response.ok) {
-        setProductId(data.productId); // Store the product ID
-        
-      } else {
-       // Alert.alert('Error', `Failed to create order: ${data.message || 'Unknown error'}`);
-        Toast.show({
-         type: 'error',
-         text2: `Failed to create order: ${data.message}`,
-       });
-      }
+// No need for response.json()
+const data = response.data;
+//console.log("Returned Data",data);
+
+if (response.data.success) {
+  setProductId(data.productId); // Store the product ID
+} 
+
     } catch (error) {
-      //console.error('Error submitting order:', error);
-      //Alert.alert('Error', 'An error occurred. Please try again.');
+       const errorMessage =error.response?.data?.message ||'Something Went Wrong';
+        
+        
       Toast.show({
          type: 'error',
-         text2: 'An error occurred. Please try again',
+         text2: errorMessage,
        });
     } finally {
       setIsSubmitting(false);
@@ -240,7 +248,7 @@ export default function NewOrderScreen({ navigation }) {
                 <Text style={styles.inputLabel}>Client Name *</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="John Doe"
+                  placeholder="Enter Client Name"
                   placeholderTextColor="#999"
                   value={formData.clientName}
                   onChangeText={(text) => setFormData({...formData, clientName: text})}
@@ -249,15 +257,27 @@ export default function NewOrderScreen({ navigation }) {
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Contact Number</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="+255 123 456 789"
-                  placeholderTextColor="#999"
-                  keyboardType="phone-pad"
-                  value={formData.contactNumber}
-                  onChangeText={(text) => setFormData({...formData, contactNumber: text})}
-                  returnKeyType="next"
+                <Text style={styles.inputLabel}>Contact Number *</Text>
+                
+                <PhoneInput
+                  ref={phoneInput}
+                  defaultValue={formData.contactNumber}
+                  defaultCode="TZ"
+                  layout="first"
+                  containerStyle={styles.phoneInputContainer}
+                  textContainerStyle={styles.phoneTextContainer}
+                  textInputStyle={styles.phoneTextInput}
+                  codeTextStyle={styles.phoneCodeText}
+                  flagButtonStyle={styles.phoneFlagButton}
+                  textInputProps={{
+                    placeholder: 'Enter phone number',
+                    placeholderTextColor: '#999',
+                    keyboardType: 'phone-pad',
+                    returnKeyType: 'next',
+                  }}
+                  onChangeFormattedText={(text) => {
+                    setFormData({ ...formData, contactNumber: text });
+                  }}
                 />
               </View>
             </View>
@@ -461,6 +481,36 @@ const styles = StyleSheet.create({
     borderColor: '#e1e1e1',
     fontSize: 16,
     color: '#333',
+  },
+  // Phone Input Styles
+  phoneInputContainer: {
+    width: '100%',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e1e1e1',
+    height: 52,
+  },
+  phoneTextContainer: {
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    height: 50,
+  },
+  phoneTextInput: {
+    height: 50,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: 'transparent',
+  },
+  phoneCodeText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  phoneFlagButton: {
+    width: 60,
+    borderRightWidth: 1,
+    borderRightColor: '#e1e1e1',
+    marginRight: 8,
   },
   multilineInput: {
     minHeight: 100,
