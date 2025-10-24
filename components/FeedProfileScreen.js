@@ -25,10 +25,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Video } from 'expo-av';
 import BASE_URL from './Config';
 
+
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const DesignerProfileScreen = ({ route, navigation }) => {
   const { designer } = route.params;
+  //console.log("Designer",designer);
+  const designerId = typeof designer === 'object' ? designer.id : designer;
   const [activeTab, setActiveTab] = useState('works');
   const [selectedPost, setSelectedPost] = useState(null);
   const [postModalVisible, setPostModalVisible] = useState(false);
@@ -41,28 +44,30 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   const [designerWorks, setDesignerWorks] = useState([]);
   const videoRefs = useRef({});
   const [visiblePosts, setVisiblePosts] = useState(new Set());
-  const [visibleGridItems, setVisibleGridItems] = useState(new Set());
+  
   const [designerStats, setDesignerStats] = useState({});
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [designerdetails,setDesigner]=useState();
+  const [isOwner, setIsOwner] = useState(false);
 
   // Function to open WhatsApp
   const openWhatsApp = () => {
     const message = 'Hello! I would like to discuss a design project with you.';
-    const url = `whatsapp://send?phone=${designer.phone}&text=${encodeURIComponent(message)}`;
+    const url = `whatsapp://send?phone=${designer.phone?designer.phone:designerdetails.phone}&text=${encodeURIComponent(message)}`;
     
     Linking.canOpenURL(url).then(supported => {
       if (supported) {
         Linking.openURL(url);
       } else {
-        const webUrl = `https://wa.me/${designer.phone}?text=${encodeURIComponent(message)}`;
+        const webUrl = `https://wa.me/${designer.phone?designer.phone:designerdetails.phone}?text=${encodeURIComponent(message)}`;
         Linking.openURL(webUrl);
       }
     }).catch(err => {
       console.error('Error opening WhatsApp:', err);
-      const webUrl = `https://wa.me/${designer.phone}?text=${encodeURIComponent(message)}`;
+      const webUrl = `https://wa.me/${designer.phone?designer.phone:designerdetails.phone}?text=${encodeURIComponent(message)}`;
       Linking.openURL(webUrl);
     });
   };
@@ -70,6 +75,22 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   useEffect(() => {
     fetchDesignerData();
   }, []);
+
+  //fetch designer data by ID
+   useEffect(() => {
+    const fetchDesignerDataById = async () => {
+      try {
+        const response = await axios.get(`${BASE_URL}/api/getdesignerinfo/${designerId}`);
+        setDesigner(response.data);
+      } catch (error) {
+        console.error('Error fetching designer:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDesignerDataById();
+  }, [designerId]);
 
   const fetchDesignerData = async (isRefreshing = false) => {
     try {
@@ -104,7 +125,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
       }
 
       const response = await axios.get(
-        `${BASE_URL}/api/designers/works/${designer.id}`,
+        `${BASE_URL}/api/designers/works/${designerId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -149,7 +170,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
         return null;
       }
 
-      const response = await axios.get(`${BASE_URL}/api/designers/stats/${designer.id}`, {
+      const response = await axios.get(`${BASE_URL}/api/designers/stats/${designerId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -215,6 +236,31 @@ const DesignerProfileScreen = ({ route, navigation }) => {
       videoRefs.current[videoKey].playAsync();
     }
   };
+
+  //check profile ownership
+  const checkOwnership = async () => {
+    try {
+      const token = await AsyncStorage.getItem("userToken"); // JWT stored on login
+      const response = await axios.get(
+        `${BASE_URL}/api/profile/check-ownership/${designerId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setIsOwner(response.data.isOwner);
+      //console.log("Is Owner",response.data.isOwner);
+      //console.log("Is Owner value Variable",isOwner);
+    } catch (error) {
+      console.log("Error verifying ownership:", error.message);
+      setIsOwner(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+   useEffect(() => {
+    checkOwnership();
+  }, [designerId]);
 
   // Handle viewable items change for vertical scrolling in modal
   const onVerticalViewableItemsChanged = useRef(({ viewableItems }) => {
@@ -508,7 +554,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
       <Icon name="photo-library" size={80} color="#E0E0E0" />
       <Text style={styles.emptyTitle}>No Works Published</Text>
       <Text style={styles.emptySubtitle}>
-        {designer.name} hasn't published any design works yet.
+        {designer.name?designer.name:designerdetails.name} hasn't published any design works yet.
       </Text>
       <Text style={styles.emptyHint}>
         Check back later to see their amazing designs!
@@ -685,11 +731,11 @@ const DesignerProfileScreen = ({ route, navigation }) => {
         {/* Post Header */}
         <View style={styles.postHeader}>
           <Image
-            source={{ uri: designer.avatar }}
+           source={{ uri: designer.avatar ? designer.avatar : designerdetails.avatar}}
             style={styles.postAvatar}
           />
           <View style={styles.postUserInfo}>
-            <Text style={styles.postUserName}>{designer.name}</Text>
+            <Text style={styles.postUserName}>{designer.name ? designer.name:designerdetails.name}</Text>
             <Text style={styles.postCategory}>{item.category}</Text>
           </View>
         </View>
@@ -878,7 +924,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             <Image
-              source={{ uri: designer.avatar }}
+              source={{ uri: designer.avatar?designer.avatar:designerdetails.avatar }}
               style={styles.profileAvatar}
             />
             <View style={styles.verifiedBadge}>
@@ -886,39 +932,69 @@ const DesignerProfileScreen = ({ route, navigation }) => {
             </View>
           </View>
           
-          <Text style={styles.profileName}>{designer.name}</Text>
-          <Text style={styles.profileRole}>{designer.bio}</Text>
+          <Text style={styles.profileName}>{designer.name?designer.name:designerdetails.name}</Text>
+          <Text style={styles.profileRole}>{designer.bio ? designer.bio:designerdetails.bio}</Text>
           <Text style={styles.profileBio}>
-            {designer.professionalsummary}
+            {designer.professionalsummary? designer.professionalsummary:designerdetails.professionalsummary}
           </Text>
 
           {/* Stats */}
-          <View style={styles.statsContainer}>
-            {statsData.map((stat, index) => (
-              <View key={stat.label} style={styles.statItem}>
-                <Text style={styles.statNumber}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            ))}
-          </View>
+         <View style={styles.statsContainer}>
+  {statsData.map((stat) => {
+    const isNavigable =
+      stat.label === "Followers" || stat.label === "Following";
+
+    const handlePress = () => {
+      if (isNavigable) {
+        
+        navigation.navigate('VisitedUserFollowAndFollowersScreen', {
+  designerId,
+  receivedactivetab: stat.label === "Followers" ? "Followers" : "Following"
+});
+
+      }
+    };
+
+    const Wrapper = isNavigable ? TouchableOpacity : View;
+
+    return (
+      <Wrapper
+        key={stat.label}
+        style={styles.statItem}
+        onPress={handlePress}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.statNumber}>{stat.value}</Text>
+        <Text style={styles.statLabel}>{stat.label}</Text>
+      </Wrapper>
+    );
+  })}
+</View>
+
 
           {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={styles.followButton} 
-              onPress={() => FollowDesigner(designer.id)}
-            >
-              <Text style={styles.followButtonText}>{isFollowing ? 'Unfollow' : 'Follow'}</Text>
-            </TouchableOpacity>
+          {!isOwner && (
+  /* Action Buttons */
+  <View style={styles.actionButtons}>
+    <TouchableOpacity 
+      style={styles.followButton} 
+      onPress={() => FollowDesigner(designerId)}
+    >
+      <Text style={styles.followButtonText}>
+        {isFollowing ? 'Unfollow' : 'Follow'}
+      </Text>
+    </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.messageButton}
-              onPress={openWhatsApp}
-            >
-              <Icon name="chat" size={20} color="#007AFF" />
-              <Text style={styles.messageButtonText}>Message</Text>
-            </TouchableOpacity>
-          </View>
+    <TouchableOpacity 
+      style={styles.messageButton}
+      onPress={openWhatsApp}
+    >
+      <Icon name="chat" size={20} color="#007AFF" />
+      <Text style={styles.messageButtonText}>Message</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
         </View>
 
         {/* Tab Navigation */}

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import axios from 'axios';
+import { Ionicons } from '@expo/vector-icons';
 import BASE_URL from './Config';
 
 const FollowersFollowingScreen = ({ route, navigation }) => {
@@ -24,6 +25,7 @@ const FollowersFollowingScreen = ({ route, navigation }) => {
   const [following, setFollowing] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [designerName,setDesignername]=useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -31,9 +33,10 @@ const FollowersFollowingScreen = ({ route, navigation }) => {
         setLoading(true);
         const response = await axios.get(`${BASE_URL}/api/followfollower/${userId}`);
         setFollowers(response.data.followers || []);
-        console.log("Followers",followers);
-        console.log("Following",following);
+       // console.log("Followers",followers);
+       // console.log("Following",following);
         setFollowing(response.data.following || []);
+        setDesignername(response.data.designername)
       } catch (error) {
         console.error('Error fetching followers/following:', error.response?.data || error.message);
       } finally {
@@ -73,9 +76,9 @@ const FollowersFollowingScreen = ({ route, navigation }) => {
   });
 
   const handleUserPress = (userId) => {
-    console.log("Id id is",userId)
+    //console.log("Id id is",userId)
     // Navigate to profile screen with user ID
-    navigation.navigate('FeedProfileScreen', { userId });
+    navigation.navigate('FeedProfileScreen', { designer:userId });
   };
 
   const renderUserItem = ({ item }) => (
@@ -154,7 +157,7 @@ const FollowersFollowingScreen = ({ route, navigation }) => {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Designer Name</Text>
+          <Text style={styles.headerTitle}>{designerName}</Text>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
@@ -166,41 +169,44 @@ const FollowersFollowingScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Designer Name</Text>
-      </View>
+  <StatusBar barStyle="dark-content" />
+  
+  {/* Header */}
+  <View style={styles.header}>
+  <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={28} color="#4a6bff" />
+          </TouchableOpacity>
+    <Text style={styles.headerTitle}>{designerName}</Text>
+  </View>
 
-      {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'followers' && styles.activeTab]}
-          onPress={() => {
-            setActiveTab('followers');
-            setSearchQuery(''); // Clear search when switching tabs
-          }}
-        >
-          <Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>
-            Followers
-          </Text>
-          <Text style={styles.countText}>{followers.length}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'following' && styles.activeTab]}
-          onPress={() => {
-            setActiveTab('following');
-            setSearchQuery(''); // Clear search when switching tabs
-          }}
-        >
-          <Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>
-            Following
-          </Text>
-          <Text style={styles.countText}>{following.length}</Text>
-        </TouchableOpacity>
-      </View>
+  {/* Tab Navigation */}
+  <View style={styles.tabContainer}>
+    <TouchableOpacity
+      style={[styles.tab, activeTab === 'followers' && styles.activeTab]}
+      onPress={() => {
+        setActiveTab('followers');
+        setSearchQuery(''); // Clear search when switching tabs
+      }}
+    >
+      <Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>
+        Followers
+      </Text>
+      <Text style={styles.countText}>{followers.length}</Text>
+    </TouchableOpacity>
+    
+    <TouchableOpacity
+      style={[styles.tab, activeTab === 'following' && styles.activeTab]}
+      onPress={() => {
+        setActiveTab('following');
+        setSearchQuery(''); // Clear search when switching tabs
+      }}
+    >
+      <Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>
+        Following
+      </Text>
+      <Text style={styles.countText}>{following.length}</Text>
+    </TouchableOpacity>
+  </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -246,15 +252,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
-    padding: 16,
+  flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#e0e0e0',
+  },
+    backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+    backArrow: {
+    fontSize: 24,
+    color: '#000',
+    fontWeight: 'bold',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
-    color: '#000',
+    flex: 1,
+    color:'#4a6bff',
+    marginRight: 40, // To balance the back button space
   },
   tabContainer: {
     flexDirection: 'row',

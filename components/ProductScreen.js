@@ -183,11 +183,13 @@ const ProductScreen = ({ route, navigation }) => {
         }
       });
       if (response.data.success) {
+
         
         Toast.show({
                  type: 'success',
                  text2: response.data.message
                });
+               navigation.navigate('PaymentProcessingScreen')
       } 
     }  catch (err) {
   //console.error('Payment request failed');

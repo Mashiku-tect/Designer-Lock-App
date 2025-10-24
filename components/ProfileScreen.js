@@ -86,6 +86,10 @@ const ProfileScreen = ({ navigation }) => {
     navigation.navigate('followerfollowingscreen', { userId: user.id,receivedactivetab:'followers' }); // replace with your target screen
   };
 
+   const handlePosts = () => {
+    navigation.navigate('FeedProfileScreen', { designer: user.id }); // replace with your target screen
+  };
+
   const handleFollowing = () => {
     navigation.navigate('followerfollowingscreen', { userId: user.id,receivedactivetab:'following' }); // replace with your target screen
   };
@@ -311,10 +315,10 @@ const ProfileScreen = ({ navigation }) => {
 
         {/* Stats */}
         <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
+          <TouchableOpacity style={styles.statItem} onPress={handlePosts}>
             <Text style={styles.statNumber}>{user.posts}</Text>
             <Text style={styles.statLabel}>Posts</Text>
-          </View>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.statItem} onPress={handleFollower}>
       <Text style={styles.statNumber}>{user.followers || 0}</Text>
       <Text style={styles.statLabel}>Followers</Text>

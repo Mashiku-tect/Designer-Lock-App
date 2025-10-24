@@ -10,6 +10,7 @@ import { Alert,ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import { Video } from 'expo-av';
+import CustomActivityIndicator from './CustomActivityIndicator';
 
 import BASE_URL from './Config';
 

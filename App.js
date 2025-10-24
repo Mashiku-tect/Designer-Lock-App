@@ -21,6 +21,8 @@ import EditOrderScreen from "./components/EditOrderScreen";
 import FeedProfileScreen from "./components/FeedProfileScreen";
 import VideoUploadScreen from "./components/VideoScreen";
 import FollowingFollower from './components/followersfollowingscreen';
+import PaymentProcessingScreen from "./components/PaymentProcessingScreen";
+import VisitedUserFollowAndFollowersScreen from './components/VisitedUserFollowAndFollowersScreen';
 
 import { AuthProvider, AuthContext } from "./AuthContext";
 
@@ -67,6 +69,8 @@ const AppStack = () => (
     <Stack.Screen name="Inbox" component={InboxScreen} />
     <Stack.Screen name="EditOrderScreen" component={EditOrderScreen} />
     <Stack.Screen name="followerfollowingscreen" component={FollowingFollower} />
+    <Stack.Screen name="PaymentProcessingScreen" component={PaymentProcessingScreen} />
+      <Stack.Screen name="VisitedUserFollowAndFollowersScreen" component={VisitedUserFollowAndFollowersScreen} />
 
   </Stack.Navigator>
 );

@@ -26,6 +26,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
+import CustomActivityIndicator from './CustomActivityIndicator';
 import BASE_URL from './Config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -44,10 +45,33 @@ const FeedScreen = () => {
   const videoRefs = useRef({});
   const flatListRef = useRef(null);
   const [visiblePosts, setVisiblePosts] = useState(new Set());
+  
+  // Search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchError, setSearchError] = useState(null);
 
   useEffect(() => {
     fetchFeed();
   }, []);
+
+  // Debounced search function
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setShowSearchResults(false);
+      setSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      handleSearchDesigners(searchQuery.trim());
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
 
   const fetchFeed = async (isRefreshing = false) => {
     try {
@@ -96,13 +120,82 @@ const FeedScreen = () => {
       setRefreshing(false);
     }
   };
+
+  // Search designers function
+  const handleSearchDesigners = async (query) => {
+    if (!query.trim()) {
+      setShowSearchResults(false);
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setSearchLoading(true);
+      setSearchError(null);
+      
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken) {
+        setSearchError('Please login to search designers');
+        return;
+      }
+
+      const response = await axios.get(`${BASE_URL}/api/search/designers`, {
+        params: { q: query },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`,
+        },
+        timeout: 10000
+      });
+
+      setSearchResults(response.data.designers || []);
+      setShowSearchResults(true);
+      
+    } catch (error) {
+      console.error('Search designers error:', error);
+      
+      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
+        setSearchError('Network connection failed. Please check your internet connection.');
+      } else if (error.response?.status === 401) {
+        setSearchError('Session expired. Please login again.');
+      } else if (error.response?.status >= 500) {
+        setSearchError('Server error. Please try again later.');
+      } else {
+        setSearchError('Failed to search designers. Please try again.');
+      }
+      
+      setSearchResults([]);
+      setShowSearchResults(true);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Handle designer selection from search results
+  const handleDesignerSelect = (designer) => {
+    setShowSearchResults(false);
+    setSearchQuery('');
+    // Navigate to profile screen with designer ID
+    navigation.navigate('FeedProfileScreen', { 
+      designer: designer.id,
+      
+    });
+  };
+
+  // Clear search
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setShowSearchResults(false);
+    setSearchResults([]);
+    setSearchError(null);
+  };
+
 //fetch designer feeds on focus
   useFocusEffect(
   useCallback(() => {
     fetchFeed(false); // explicitly pass false or omit it if false is the default
   }, [])
 );
-
 
   const onRefresh = () => {
     fetchFeed(true);
@@ -411,6 +504,39 @@ const FeedScreen = () => {
     return url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov') || url.toLowerCase().endsWith('.avi');
   };
 
+  // Render search result item
+  const renderSearchResultItem = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.searchResultItem}
+      onPress={() => handleDesignerSelect(item)}
+      activeOpacity={0.7}
+    >
+      <Image 
+        source={{ uri: item.profileImage || item.avatar }} 
+        style={styles.searchResultAvatar}
+        defaultSource={require('../assets/profile-placeholder.png')}
+      />
+      <View style={styles.searchResultInfo}>
+        <Text style={styles.searchResultName}>{item.name || 'Unknown Designer'}</Text>
+        <Text style={styles.searchResultBio} numberOfLines={2}>
+          {item.bio || 'No bio available'}
+        </Text>
+      </View>
+      <Icon name="chevron-right" size={20} color="#999" />
+    </TouchableOpacity>
+  );
+
+  // Render empty search results
+  const renderEmptySearchResults = () => (
+    <View style={styles.emptySearchContainer}>
+      <Icon name="search-off" size={64} color="#E0E0E0" />
+      <Text style={styles.emptySearchTitle}>No designers found</Text>
+      <Text style={styles.emptySearchText}>
+        No designers match "{searchQuery}"
+      </Text>
+    </View>
+  );
+
   // Render empty state for feeds
   const renderEmptyFeeds = () => (
     <View style={styles.emptyContainer}>
@@ -675,11 +801,70 @@ const FeedScreen = () => {
         >
           <Ionicons name="chevron-back" size={24} color="#4a6bff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Design Feed</Text>
+        
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Icon name="search" size={20} color="#666" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search designers..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#999"
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch}>
+              <Icon name="close" size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
+
         <TouchableOpacity style={styles.headerButton}>
           {/* <Icon name="tune" size={24} color="#333" /> */}
         </TouchableOpacity>
       </View>
+      
+      {/* Search Results Overlay */}
+      {showSearchResults && (
+        <View style={styles.searchResultsOverlay}>
+          <View style={styles.searchResultsContainer}>
+            <View style={styles.searchResultsHeader}>
+              <Text style={styles.searchResultsTitle}>Search Results</Text>
+              <TouchableOpacity onPress={handleClearSearch}>
+                <Icon name="close" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+            
+            {searchLoading ? (
+              <View style={styles.searchLoadingContainer}>
+                <ActivityIndicator size="small" color="#4a6bff" />
+                <Text style={styles.searchLoadingText}>Searching designers...</Text>
+              </View>
+            ) : searchError ? (
+              <View style={styles.searchErrorContainer}>
+                <Icon name="error-outline" size={48} color="#FF3B30" />
+                <Text style={styles.searchErrorText}>{searchError}</Text>
+                <TouchableOpacity 
+                  style={styles.retryButton}
+                  onPress={() => handleSearchDesigners(searchQuery)}
+                >
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <FlatList
+                data={searchResults}
+                renderItem={renderSearchResultItem}
+                keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={renderEmptySearchResults}
+                contentContainerStyle={searchResults.length === 0 ? styles.emptySearchListContent : null}
+              />
+            )}
+          </View>
+        </View>
+      )}
       
       <FlatList
         ref={flatListRef}
@@ -778,10 +963,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    gap: 12,
   },
   headerTitle: {
     fontSize: 28,
@@ -790,6 +976,131 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 8,
+  },
+  // Search styles
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#000',
+    paddingVertical: 8,
+  },
+  // Search results styles
+  searchResultsOverlay: {
+    position: 'absolute',
+    top: 70,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 1000,
+  },
+  searchResultsContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+    margin: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  searchResultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  searchResultsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1D1D1F',
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  searchResultAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1D1D1F',
+    marginBottom: 4,
+  },
+  searchResultBio: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 18,
+  },
+  searchLoadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  searchErrorContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchErrorText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  emptySearchContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 50,
+    paddingHorizontal: 40,
+  },
+  emptySearchTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySearchText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+  },
+  emptySearchListContent: {
+    flexGrow: 1,
   },
   listContent: {
     paddingVertical: 8,
