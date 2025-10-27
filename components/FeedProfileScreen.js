@@ -25,13 +25,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Video } from 'expo-av';
 import BASE_URL from './Config';
 
-
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const DesignerProfileScreen = ({ route, navigation }) => {
   const { designer } = route.params;
-  //console.log("Designer",designer);
   const designerId = typeof designer === 'object' ? designer.id : designer;
+  
+  // State declarations
   const [activeTab, setActiveTab] = useState('works');
   const [selectedPost, setSelectedPost] = useState(null);
   const [postModalVisible, setPostModalVisible] = useState(false);
@@ -50,61 +50,64 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [designerdetails,setDesigner]=useState();
+  const [designerdetails, setDesigner] = useState(null);
+  const [loggedInUserId, setLoggedinUserId] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
+  
+  // Combined loading state - we're ready when we have all critical data
+  const [isReady, setIsReady] = useState(false);
+
+  // Add these to your existing state declarations
+const [mediaLoading, setMediaLoading] = useState({}); // Track individual media loading
+const [mediaErrors, setMediaErrors] = useState({}); // Track media loading errors
+const [commentLoading, setCommentLoading] = useState(false); // Track comments loading
 
   // Function to open WhatsApp
   const openWhatsApp = () => {
+    if (!designerdetails?.phone) return;
+    
     const message = 'Hello! I would like to discuss a design project with you.';
-    const url = `whatsapp://send?phone=${designer.phone?designer.phone:designerdetails.phone}&text=${encodeURIComponent(message)}`;
+    const url = `whatsapp://send?phone=${designerdetails.phone}&text=${encodeURIComponent(message)}`;
     
     Linking.canOpenURL(url).then(supported => {
       if (supported) {
         Linking.openURL(url);
       } else {
-        const webUrl = `https://wa.me/${designer.phone?designer.phone:designerdetails.phone}?text=${encodeURIComponent(message)}`;
+        const webUrl = `https://wa.me/${designerdetails.phone}?text=${encodeURIComponent(message)}`;
         Linking.openURL(webUrl);
       }
     }).catch(err => {
       console.error('Error opening WhatsApp:', err);
-      const webUrl = `https://wa.me/${designer.phone?designer.phone:designerdetails.phone}?text=${encodeURIComponent(message)}`;
+      const webUrl = `https://wa.me/${designerdetails.phone}?text=${encodeURIComponent(message)}`;
       Linking.openURL(webUrl);
     });
   };
-  
-  useEffect(() => {
-    fetchDesignerData();
-  }, []);
 
-  //fetch designer data by ID
-   useEffect(() => {
-    const fetchDesignerDataById = async () => {
-      try {
-        const response = await axios.get(`${BASE_URL}/api/getdesignerinfo/${designerId}`);
-        setDesigner(response.data);
-      } catch (error) {
-        console.error('Error fetching designer:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDesignerDataById();
-  }, [designerId]);
-
-  const fetchDesignerData = async (isRefreshing = false) => {
+  // Main data fetching function
+  const fetchAllData = async (isRefreshing = false) => {
     try {
-      if (isRefreshing) {
-        setRefreshing(true);
-      } else {
+      if (!isRefreshing) {
         setLoading(true);
+        setError(null);
+        setIsReady(false);
+      } else {
+        setRefreshing(true);
       }
-      setError(null);
 
-      await Promise.all([
+      // Fetch all data in parallel
+      const [designerInfo, worksData, statsData, ownershipData] = await Promise.all([
+        fetchDesignerInfo(),
         FetchDesignerWorks(),
-        fetchDesignerStats()
+        fetchDesignerStats(),
+        checkOwnership()
       ]);
+
+      // Set all states
+      setDesigner(designerInfo);
+      setIsOwner(ownershipData);
+      
+      // Mark as ready when all critical data is loaded
+      setIsReady(true);
 
     } catch (error) {
       console.error('Error fetching designer data:', error);
@@ -115,29 +118,43 @@ const DesignerProfileScreen = ({ route, navigation }) => {
     }
   };
 
-  // Fetch designer works from designer data on component mount
+  useEffect(() => {
+    fetchAllData();
+  }, [designerId]);
+
+  // Fetch designer info
+  const fetchDesignerInfo = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}/api/getdesignerinfo/${designerId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching designer info:', error);
+      throw error;
+    }
+  };
+
+  // Fetch designer works
   const FetchDesignerWorks = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
         setError('Please login to view designer works');
-        return;
+        return null;
       }
 
       const response = await axios.get(
         `${BASE_URL}/api/designers/works/${designerId}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
+          headers: { Authorization: `Bearer ${token}` },
           timeout: 10000
         }
       );
 
       const works = response.data.works;
       setDesignerWorks(works);
+      setLoggedinUserId(response.data.loggedInUserId);
       setIsFollowing(response.data.hasFollowedThisDesigner);
-      
+
       const initialLikedPosts = {};
       works.forEach(post => {
         initialLikedPosts[post.id] = post.hasliked || false;
@@ -148,38 +165,23 @@ const DesignerProfileScreen = ({ route, navigation }) => {
 
     } catch (error) {
       console.error('Error fetching designer works:', error);
-      
-      if (error.code === 'ECONNABORTED' || error.message === 'Network Error') {
-        setError('Network connection failed. Please check your internet connection.');
-      } else if (error.response?.status === 401) {
-        setError('Session expired. Please login again.');
-      } else if (error.response?.status >= 500) {
-        setError('Server error. Please try again later.');
-      } else {
-        setError('Failed to load designer works. Please try again.');
-      }
       throw error;
     }
   };
 
-  //fetch designer stats
+  // Fetch designer stats
   const fetchDesignerStats = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
-      if (!token) {
-        return null;
-      }
+      if (!token) return null;
 
       const response = await axios.get(`${BASE_URL}/api/designers/stats/${designerId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         timeout: 10000
       });
 
-      const stats = response.data;
-      setDesignerStats(stats);
-      return stats;
+      setDesignerStats(response.data);
+      return response.data;
 
     } catch (error) {
       console.error('Failed to fetch designer stats:', error);
@@ -187,6 +189,22 @@ const DesignerProfileScreen = ({ route, navigation }) => {
     }
   };
 
+  // Check ownership
+  const checkOwnership = async () => {
+    try {
+      const token = await AsyncStorage.getItem("userToken");
+      const response = await axios.get(
+        `${BASE_URL}/api/profile/check-ownership/${designerId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return response.data.isOwner;
+    } catch (error) {
+      console.log("Error verifying ownership:", error.message);
+      return false;
+    }
+  };
+
+  // Follow/Unfollow designer
   const FollowDesigner = async (designerId) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
@@ -198,11 +216,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
       const response = await axios.post(
         `${BASE_URL}/api/designers/toggle-follow/${designerId}`,
         {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          }
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       
       if (response.data.isFollowing !== undefined) {
@@ -237,31 +251,6 @@ const DesignerProfileScreen = ({ route, navigation }) => {
     }
   };
 
-  //check profile ownership
-  const checkOwnership = async () => {
-    try {
-      const token = await AsyncStorage.getItem("userToken"); // JWT stored on login
-      const response = await axios.get(
-        `${BASE_URL}/api/profile/check-ownership/${designerId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      setIsOwner(response.data.isOwner);
-      //console.log("Is Owner",response.data.isOwner);
-      //console.log("Is Owner value Variable",isOwner);
-    } catch (error) {
-      console.log("Error verifying ownership:", error.message);
-      setIsOwner(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-   useEffect(() => {
-    checkOwnership();
-  }, [designerId]);
-
   // Handle viewable items change for vertical scrolling in modal
   const onVerticalViewableItemsChanged = useRef(({ viewableItems }) => {
     pauseAllVideos();
@@ -290,21 +279,44 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   }).current;
 
   const formatDate = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) {
-      return 'Just now';
-    } else if (diffInHours < 24) {
-      return `${diffInHours}h ago`;
-    } else {
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    }
-  };
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - date) / 1000);
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  const diffInDays = Math.floor(diffInHours / 24);
+  const diffInWeeks = Math.floor(diffInDays / 7);
+  const diffInMonths = Math.floor(diffInDays / 30);
+  const diffInYears = Math.floor(diffInDays / 365);
+
+  if (diffInSeconds < 60) {
+    return 'Just now';
+  } else if (diffInMinutes === 1) {
+    return '1 min ago';
+  } else if (diffInMinutes < 60) {
+    return `${diffInMinutes} mins ago`;
+  } else if (diffInHours === 1) {
+    return '1 hour ago';
+  } else if (diffInHours < 24) {
+    return `${diffInHours} hours ago`;
+  } else if (diffInDays === 1) {
+    return 'Yesterday';
+  } else if (diffInDays < 7) {
+    return `${diffInDays} days ago`;
+  } else if (diffInWeeks === 1) {
+    return '1 week ago';
+  } else if (diffInWeeks < 4) {
+    return `${diffInWeeks} weeks ago`;
+  } else if (diffInMonths === 1) {
+    return '1 month ago';
+  } else if (diffInMonths < 12) {
+    return `${diffInMonths} months ago`;
+  } else if (diffInYears === 1) {
+    return '1 year ago';
+  } else {
+    return `${diffInYears} years ago`;
+  }
+};
 
   // Check if file is video based on extension
   const isVideoFile = (url) => {
@@ -337,10 +349,31 @@ const DesignerProfileScreen = ({ route, navigation }) => {
     setVisiblePosts(new Set());
   };
 
-  const openComments = (post) => {
-    setSelectedPost(post);
-    setCommentModalVisible(true);
-  };
+  const openComments = async (post) => {
+  setCommentLoading(true);
+  setSelectedPost(post);
+  setCommentModalVisible(true);
+  
+  // Simulate loading comments (you can remove this if comments load instantly)
+  setTimeout(() => {
+    setCommentLoading(false);
+  }, 500);
+};
+
+// Add comment skeleton renderer
+const renderCommentSkeleton = () => (
+  <View style={styles.commentSkeleton}>
+    <View style={styles.skeletonCommentAvatar} />
+    <View style={styles.skeletonCommentContent}>
+      <View style={styles.skeletonCommentHeader}>
+        <View style={[styles.skeletonText, { width: '40%', height: 14 }]} />
+        <View style={[styles.skeletonText, { width: '20%', height: 12 }]} />
+      </View>
+      <View style={[styles.skeletonText, { width: '80%', height: 14, marginTop: 6 }]} />
+      <View style={[styles.skeletonText, { width: '60%', height: 14, marginTop: 4 }]} />
+    </View>
+  </View>
+);
 
   const closeComments = () => {
     setCommentModalVisible(false);
@@ -554,10 +587,14 @@ const DesignerProfileScreen = ({ route, navigation }) => {
       <Icon name="photo-library" size={80} color="#E0E0E0" />
       <Text style={styles.emptyTitle}>No Works Published</Text>
       <Text style={styles.emptySubtitle}>
-        {designer.name?designer.name:designerdetails.name} hasn't published any design works yet.
+        {designerId === loggedInUserId
+          ? "You haven't published any design works yet."
+          : `${designerdetails?.name} hasn't published any design works yet.`}
       </Text>
       <Text style={styles.emptyHint}>
-        Check back later to see their amazing designs!
+        {designerId === loggedInUserId
+          ? "Start uploading your creations to showcase your talent!"
+          : "Check back later to see their amazing designs!"}
       </Text>
     </View>
   );
@@ -572,68 +609,175 @@ const DesignerProfileScreen = ({ route, navigation }) => {
       </Text>
       <TouchableOpacity 
         style={styles.retryButton} 
-        onPress={() => fetchDesignerData()}
+        onPress={() => fetchAllData()}
       >
         <Text style={styles.retryButtonText}>Try Again</Text>
       </TouchableOpacity>
     </View>
   );
 
-  // Render loading state
-  const renderLoading = () => (
-    <View style={styles.loadingContainer}>
+  // Render skeleton loader
+  const renderSkeletonLoader = () => (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="chevron-back" size={24} color="#4a6bff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Designer Profile</Text>
+        <TouchableOpacity style={styles.menuButton}>
+          <Icon name="more-vert" size={24} color="#4a6bff" />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Skeleton Profile Header */}
+        <View style={styles.profileHeader}>
+          <View style={styles.avatarContainer}>
+            <View style={[styles.profileAvatar, styles.skeleton]} />
+          </View>
+          
+          <View style={[styles.skeleton, styles.skeletonText, { width: 120, height: 24, marginBottom: 8 }]} />
+          <View style={[styles.skeleton, styles.skeletonText, { width: 160, height: 18, marginBottom: 12 }]} />
+          <View style={[styles.skeleton, styles.skeletonText, { width: '80%', height: 14, marginBottom: 24 }]} />
+
+          {/* Skeleton Stats */}
+          <View style={styles.statsContainer}>
+            {[1, 2, 3, 4].map((item) => (
+              <View key={item} style={styles.statItem}>
+                <View style={[styles.skeleton, styles.skeletonText, { width: 30, height: 18, marginBottom: 4 }]} />
+                <View style={[styles.skeleton, styles.skeletonText, { width: 40, height: 12 }]} />
+              </View>
+            ))}
+          </View>
+
+          {/* Skeleton Action Buttons - Always show both to prevent layout shift */}
+          <View style={styles.actionButtons}>
+            <View style={[styles.followButton, styles.skeleton]} />
+            <View style={[styles.messageButton, styles.skeleton]} />
+          </View>
+        </View>
+
+        {/* Skeleton Tabs */}
+        <View style={styles.tabContainer}>
+          <View style={[styles.tab, styles.skeleton]} />
+          <View style={[styles.tab, styles.skeleton]} />
+        </View>
+
+        {/* Skeleton Content */}
+        <View style={[styles.skeleton, { height: 200, margin: 20 }]} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+
+ const renderMediaItem = ({ item, index, postId }) => {
+  const isVideo = isVideoFile(item);
+  const isPostVisible = visiblePosts.has(postId);
+  const isActiveItem = activeImageIndex === index;
+  const mediaKey = `${postId}-${index}`;
+  const isLoading = mediaLoading[mediaKey];
+  const hasError = mediaErrors[mediaKey];
+  
+  // Handle media load start
+  const handleMediaLoadStart = () => {
+    setMediaLoading(prev => ({ ...prev, [mediaKey]: true }));
+    setMediaErrors(prev => ({ ...prev, [mediaKey]: false }));
+  };
+
+  // Handle media load end
+  const handleMediaLoadEnd = () => {
+    setMediaLoading(prev => ({ ...prev, [mediaKey]: false }));
+  };
+
+  // Handle media error
+  const handleMediaError = (error) => {
+    console.error(`Media loading error for ${mediaKey}:`, error);
+    setMediaLoading(prev => ({ ...prev, [mediaKey]: false }));
+    setMediaErrors(prev => ({ ...prev, [mediaKey]: true }));
+  };
+
+  // Render media skeleton
+  const renderMediaSkeleton = () => (
+    <View style={styles.mediaSkeleton}>
       <ActivityIndicator size="large" color="#4a6bff" />
-      <Text style={styles.loadingText}>Loading designer profile...</Text>
+      <Text style={styles.skeletonText}>Loading media...</Text>
     </View>
   );
 
-  const renderMediaItem = ({ item, index, postId }) => {
-    const isVideo = isVideoFile(item);
-    const isPostVisible = visiblePosts.has(postId);
-    const isActiveItem = activeImageIndex === index;
-    
-    return (
-      <View style={styles.mediaItem}>
-        {isVideo ? (
-          <View style={styles.videoContainer}>
-            <Video
-              ref={ref => videoRefs.current[`${postId}-${index}`] = ref}
-              source={{ uri: item }}
-              style={styles.video}
-              resizeMode="cover"
-              shouldPlay={isPostVisible && isActiveItem}
-              isLooping
-              useNativeControls
-            />
-            {!isPostVisible && (
-              <TouchableOpacity 
-                style={styles.playButton}
-                onPress={() => {
-                  if (videoRefs.current[`${postId}-${index}`]) {
-                    videoRefs.current[`${postId}-${index}`].playAsync();
-                  }
-                }}
-              >
-                <Icon name="play-arrow" size={48} color="white" />
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
+  // Render media error
+  const renderMediaError = () => (
+    <View style={styles.mediaError}>
+      <Icon name="error-outline" size={48} color="#ff6b6b" />
+      <Text style={styles.errorText}>Failed to load media</Text>
+      <Text style={styles.errorSubtext}>Please check your connection</Text>
+      <TouchableOpacity 
+        style={styles.retryButton}
+        onPress={() => {
+          setMediaErrors(prev => ({ ...prev, [mediaKey]: false }));
+          setMediaLoading(prev => ({ ...prev, [mediaKey]: true }));
+        }}
+      >
+        <Text style={styles.retryButtonText}>Retry</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <View style={styles.mediaItem}>
+      {isVideo ? (
+        <View style={styles.videoContainer}>
+          <Video
+            ref={ref => videoRefs.current[mediaKey] = ref}
+            source={{ uri: item }}
+            style={styles.video}
+            resizeMode="cover"
+            shouldPlay={isPostVisible && isActiveItem && !isLoading && !hasError}
+            isLooping
+            useNativeControls={false}
+            onLoadStart={handleMediaLoadStart}
+            onLoad={handleMediaLoadEnd}
+            onError={handleMediaError}
+          />
+          {isLoading && renderMediaSkeleton()}
+          {hasError && renderMediaError()}
+          {!isPostVisible && !isLoading && !hasError && (
+            <TouchableOpacity 
+              style={styles.playButton}
+              onPress={() => {
+                if (videoRefs.current[mediaKey]) {
+                  videoRefs.current[mediaKey].playAsync();
+                }
+              }}
+            >
+              <Icon name="play-arrow" size={48} color="white" />
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
+        <View style={styles.imageContainer}>
           <Image
             source={{ uri: item }}
             style={styles.detailImage}
             resizeMode="cover"
+            onLoadStart={handleMediaLoadStart}
+            onLoadEnd={handleMediaLoadEnd}
+            onError={handleMediaError}
           />
-        )}
-        {isVideo && (
-          <View style={styles.videoIndicator}>
-            <Icon name="videocam" size={16} color="#666" />
-            <Text style={styles.videoIndicatorText}>Video</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
+          {isLoading && renderMediaSkeleton()}
+          {hasError && renderMediaError()}
+        </View>
+      )}
+      {isVideo && !isLoading && !hasError && (
+        <View style={styles.videoIndicator}>
+          <Icon name="videocam" size={16} color="#666" />
+          <Text style={styles.videoIndicatorText}>Video</Text>
+        </View>
+      )}
+    </View>
+  );
+};
 
   const renderGridItem = ({ item, index }) => {
     const isLiked = likedPosts[item.id];
@@ -695,7 +839,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
 
   const renderCommentItem = ({ item }) => (
     <View style={styles.commentItem}>
-      <Image source={{ uri: item.user?.avatar || 'https://www.freepik.com/free-vector/blue-circle-with-white-user_145857007.htm#fromView=keyword&page=1&position=0&uuid=a1749431-0ca1-4f52-889e-ed01c150ed5b&query=Avatar+placeholder' }} style={styles.commentAvatar} />
+      <Image source={{ uri: item.user?.avatar || 'https://via.placeholder.com/36' }} style={styles.commentAvatar} />
       <View style={styles.commentContent}>
         <View style={styles.commentHeader}>
           <Text style={styles.commentUserName}>{item.user?.name || 'User'}</Text>
@@ -731,11 +875,11 @@ const DesignerProfileScreen = ({ route, navigation }) => {
         {/* Post Header */}
         <View style={styles.postHeader}>
           <Image
-           source={{ uri: designer.avatar ? designer.avatar : designerdetails.avatar}}
+            source={{ uri: designerdetails?.avatar }}
             style={styles.postAvatar}
           />
           <View style={styles.postUserInfo}>
-            <Text style={styles.postUserName}>{designer.name ? designer.name:designerdetails.name}</Text>
+            <Text style={styles.postUserName}>{designerdetails?.name}</Text>
             <Text style={styles.postCategory}>{item.category}</Text>
           </View>
         </View>
@@ -819,7 +963,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
         {/* Description */}
         <View style={styles.postDescription}>
           <Text style={styles.descriptionText}>
-            <Text style={styles.userNameText}>{designer.name} </Text>
+            <Text style={styles.userNameText}>{designerdetails?.name} </Text>
             {item.description}
           </Text>
         </View>
@@ -868,8 +1012,9 @@ const DesignerProfileScreen = ({ route, navigation }) => {
     { label: 'Likes', value: designerStats.likes || 0 },
   ];
 
-  if (loading) {
-    return renderLoading();
+  // Show skeleton loader until all data is ready
+  if (loading || !isReady) {
+    return renderSkeletonLoader();
   }
 
   if (error) {
@@ -914,7 +1059,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => fetchDesignerData(true)}
+            onRefresh={() => fetchAllData(true)}
             colors={['#4a6bff']}
             tintColor="#4a6bff"
           />
@@ -924,7 +1069,7 @@ const DesignerProfileScreen = ({ route, navigation }) => {
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             <Image
-              source={{ uri: designer.avatar?designer.avatar:designerdetails.avatar }}
+              source={{ uri: designerdetails?.avatar }}
               style={styles.profileAvatar}
             />
             <View style={styles.verifiedBadge}>
@@ -932,69 +1077,65 @@ const DesignerProfileScreen = ({ route, navigation }) => {
             </View>
           </View>
           
-          <Text style={styles.profileName}>{designer.name?designer.name:designerdetails.name}</Text>
-          <Text style={styles.profileRole}>{designer.bio ? designer.bio:designerdetails.bio}</Text>
+          <Text style={styles.profileName}>{designerdetails?.name}</Text>
+          <Text style={styles.profileRole}>{designerdetails?.bio}</Text>
           <Text style={styles.profileBio}>
-            {designer.professionalsummary? designer.professionalsummary:designerdetails.professionalsummary}
+            {designerdetails?.professionalsummary}
           </Text>
 
           {/* Stats */}
-         <View style={styles.statsContainer}>
-  {statsData.map((stat) => {
-    const isNavigable =
-      stat.label === "Followers" || stat.label === "Following";
+          <View style={styles.statsContainer}>
+            {statsData.map((stat) => {
+              const isNavigable =
+                stat.label === "Followers" || stat.label === "Following";
 
-    const handlePress = () => {
-      if (isNavigable) {
-        
-        navigation.navigate('VisitedUserFollowAndFollowersScreen', {
-  designerId,
-  receivedactivetab: stat.label === "Followers" ? "Followers" : "Following"
-});
+              const handlePress = () => {
+                if (isNavigable) {
+                  navigation.navigate('VisitedUserFollowAndFollowersScreen', {
+                    designername: designerdetails?.name,
+                    designerId,
+                    receivedactivetab: stat.label === "Followers" ? "Followers" : "Following"
+                  });
+                }
+              };
 
-      }
-    };
+              const Wrapper = isNavigable ? TouchableOpacity : View;
 
-    const Wrapper = isNavigable ? TouchableOpacity : View;
+              return (
+                <Wrapper
+                  key={stat.label}
+                  style={styles.statItem}
+                  onPress={handlePress}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.statNumber}>{stat.value}</Text>
+                  <Text style={styles.statLabel}>{stat.label}</Text>
+                </Wrapper>
+              );
+            })}
+          </View>
 
-    return (
-      <Wrapper
-        key={stat.label}
-        style={styles.statItem}
-        onPress={handlePress}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.statNumber}>{stat.value}</Text>
-        <Text style={styles.statLabel}>{stat.label}</Text>
-      </Wrapper>
-    );
-  })}
-</View>
-
-
-          {/* Action Buttons */}
+          {/* Action Buttons - No more flickering! */}
           {!isOwner && (
-  /* Action Buttons */
-  <View style={styles.actionButtons}>
-    <TouchableOpacity 
-      style={styles.followButton} 
-      onPress={() => FollowDesigner(designerId)}
-    >
-      <Text style={styles.followButtonText}>
-        {isFollowing ? 'Unfollow' : 'Follow'}
-      </Text>
-    </TouchableOpacity>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity 
+                style={styles.followButton} 
+                onPress={() => FollowDesigner(designerId)}
+              >
+                <Text style={styles.followButtonText}>
+                  {isFollowing ? 'Unfollow' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
 
-    <TouchableOpacity 
-      style={styles.messageButton}
-      onPress={openWhatsApp}
-    >
-      <Icon name="chat" size={20} color="#007AFF" />
-      <Text style={styles.messageButtonText}>Message</Text>
-    </TouchableOpacity>
-  </View>
-)}
-
+              <TouchableOpacity 
+                style={styles.messageButton}
+                onPress={openWhatsApp}
+              >
+                <Icon name="chat" size={20} color="#007AFF" />
+                <Text style={styles.messageButtonText}>Message</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Tab Navigation */}
@@ -1037,15 +1178,15 @@ const DesignerProfileScreen = ({ route, navigation }) => {
               <Text style={styles.sectionTitle}>Information</Text>
               <View style={styles.infoItem}>
                 <Icon name="location-on" size={20} color="#666" />
-                <Text style={styles.infoText}>{designer.location || 'Not specified'}</Text>
+                <Text style={styles.infoText}>{designerdetails?.location || 'Not specified'}</Text>
               </View>
               <View style={styles.infoItem}>
                 <Icon name="work" size={20} color="#666" />
-                <Text style={styles.infoText}>{designer.work || 'Not specified'}</Text>
+                <Text style={styles.infoText}>{designerdetails?.work || 'Not specified'}</Text>
               </View>
               <View style={styles.infoItem}>
                 <Icon name="school" size={20} color="#666" />
-                <Text style={styles.infoText}>{designer.education || 'Not specified'}</Text>
+                <Text style={styles.infoText}>{designerdetails?.education || 'Not specified'}</Text>
               </View>
             </View>
 
@@ -1129,19 +1270,30 @@ const DesignerProfileScreen = ({ route, navigation }) => {
           </View>
 
           {/* Comments List */}
-          {selectedPost && (
-            <FlatList
-              data={selectedPost.comments || []}
-              renderItem={renderCommentItem}
-              keyExtractor={item => item.id}
-              style={styles.commentsList}
-              contentContainerStyle={[
-                styles.commentsListContent,
-                (selectedPost.comments || []).length === 0 && styles.emptyCommentsListContent
-              ]}
-              ListEmptyComponent={renderEmptyComments}
-            />
-          )}
+      {selectedPost && (
+  <FlatList
+    data={commentLoading ? [] : selectedPost.comments || []}
+    renderItem={renderCommentItem}
+    keyExtractor={item => item.id}
+    style={styles.commentsList}
+    contentContainerStyle={[
+      styles.commentsListContent,
+      ((selectedPost.comments || []).length === 0 && !commentLoading) && styles.emptyCommentsListContent
+    ]}
+    ListEmptyComponent={
+      commentLoading ? null : renderEmptyComments()
+    }
+    ListHeaderComponent={
+      commentLoading ? (
+        <View style={styles.commentLoadingContainer}>
+          {[1, 2, 3].map((item) => (
+            <View key={item}>{renderCommentSkeleton()}</View>
+          ))}
+        </View>
+      ) : null
+    }
+  />
+)}
 
           {/* Add Comment Input */}
           <View style={styles.addCommentContainer}>
@@ -1174,13 +1326,10 @@ const DesignerProfileScreen = ({ route, navigation }) => {
   );
 };
 
-// ... styles remain exactly the same as in your original code ...
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    
   },
   header: {
     flexDirection: 'row',
@@ -1193,18 +1342,14 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
-    
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#4a6bff',
-   
-    
   },
   menuButton: {
     padding: 4,
-    
   },
   scrollView: {
     flex: 1,
@@ -1752,12 +1897,12 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   noSkillsText: {
-  fontStyle: 'italic',
-  color: '#888',
-  textAlign: 'center',
-  marginTop: 10,
-},
-emptyContainer: {
+    fontStyle: 'italic',
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1807,8 +1952,90 @@ emptyContainer: {
     fontSize: 16,
     color: '#666',
   },
+  // Skeleton styles
+  skeleton: {
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+  },
+  skeletonText: {
+    borderRadius: 2,
+  },
 
+  // added styles
+   imageContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  mediaSkeleton: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  skeletonText: {
+    color: '#fff',
+    marginTop: 8,
+    fontSize: 14,
+  },
+  mediaError: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    padding: 20,
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    color: '#ccc',
+    fontSize: 14,
+    marginTop: 4,
+    textAlign: 'center',
+  },
 
+  // Comment Skeleton Styles
+  commentSkeleton: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+  },
+  skeletonCommentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0f0f0',
+    marginRight: 12,
+  },
+  skeletonCommentContent: {
+    flex: 1,
+  },
+  skeletonCommentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  commentLoadingContainer: {
+    paddingVertical: 8,
+  },
+
+  // Update existing styles for better media handling
+  videoContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  mediaItem: {
+    width: screenWidth,
+    height: screenWidth,
+    position: 'relative',
+  },
 });
 
 export default DesignerProfileScreen;

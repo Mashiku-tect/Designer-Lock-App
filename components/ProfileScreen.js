@@ -178,7 +178,7 @@ const ProfileScreen = ({ navigation }) => {
     try {
       setLoading(true);
       const updatedData = { [editField]: editValue };
-      await axios.put(`${BASE_URL}/api/updateprofile`, updatedData, {
+      const response=await axios.put(`${BASE_URL}/api/updateprofile`, updatedData, {
         headers: {
           Authorization: `Bearer ${userToken}`,
         },
@@ -188,7 +188,7 @@ const ProfileScreen = ({ navigation }) => {
       setEditField(null);
       setEditValue('');
     } catch (error) {
-      Alert.alert('Error', 'Failed to update profile');
+      Alert.alert('Error', `Failed to update profile ${error.response.data.error}`);
       console.error(error);
     } finally {
       setLoading(false);
@@ -266,12 +266,52 @@ const ProfileScreen = ({ navigation }) => {
 
 
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#4a6bff" />
+  return (
+    <View style={styles.loadingContainer}>
+      {/* Real Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={24} color="#4a6bff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <View style={{ width: 24 }} />
       </View>
-    );
-  }
+
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        {/* Profile Image with Loader */}
+        <View style={styles.profileImageContainer}>
+          <View style={styles.loadingProfileImage}>
+            <ActivityIndicator size="large" color="#4a6bff" />
+          </View>
+        </View>
+
+        {/* Simple Name Skeleton */}
+        <View style={styles.nameContainer}>
+          <View style={[styles.skeleton, { width: 150, height: 24 }]} />
+        </View>
+
+        {/* Stats Skeletons */}
+        <View style={styles.statsContainer}>
+          {[1, 2, 3].map((item) => (
+            <View key={item} style={styles.statItem}>
+              <View style={[styles.skeleton, { width: 30, height: 18, marginBottom: 4 }]} />
+              <View style={[styles.skeleton, { width: 40, height: 12 }]} />
+            </View>
+          ))}
+        </View>
+
+        {/* Simple Section Skeletons */}
+        {['Bio', 'Work', 'Education', 'Skills'].map((section) => (
+          <View key={section} style={styles.section}>
+            <Text style={styles.sectionTitle}>{section}</Text>
+            <View style={[styles.skeleton, { width: '100%', height: 16, marginTop: 8 }]} />
+            <View style={[styles.skeleton, { width: '80%', height: 16, marginTop: 4 }]} />
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
 
   if (!user) {
     return (
@@ -444,7 +484,7 @@ const ProfileScreen = ({ navigation }) => {
             icon="phone" 
             label="Phone" 
             value={user.phonenumber} 
-            onPress={() => startEditing('phone', user.phonenumber)}
+            onPress={() => startEditing('phonenumber', user.phonenumber)}
           />
           
           <InfoItem 
@@ -880,6 +920,57 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+
+  //added style sheet
+  loadingContainer: {
+  flex: 1,
+  backgroundColor: '#f8f9fa',
+},
+loadingHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: 20,
+  backgroundColor: 'white',
+  borderBottomWidth: 1,
+  borderBottomColor: '#eee',
+},
+loadingContent: {
+  flex: 1,
+  alignItems: 'center',
+  paddingTop: 20,
+},
+loadingProfileImage: {
+  width: 120,
+  height: 120,
+  borderRadius: 60,
+  backgroundColor: '#f0f0f0',
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginBottom: 20,
+},
+loadingStats: {
+  flexDirection: 'row',
+  justifyContent: 'space-around',
+  width: '100%',
+  paddingHorizontal: 20,
+  marginBottom: 20,
+},
+loadingStatItem: {
+  alignItems: 'center',
+},
+loadingSection: {
+  backgroundColor: 'white',
+  padding: 15,
+  marginHorizontal: 15,
+  marginBottom: 15,
+  borderRadius: 12,
+  width: '90%',
+},
+skeleton: {
+  backgroundColor: '#E0E0E0',
+  borderRadius: 4,
+},
 });
 
 export default ProfileScreen;

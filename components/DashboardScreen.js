@@ -186,13 +186,79 @@ const handleEditOrder = (order) => {
     setSearchQuery('');
     setSearchResults([]);
   };
-if(loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0000ff" />
+if (loading) {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        {/* Header with subtle animation */}
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <View style={[styles.skeletonShimmer, { width: 120, height: 18, marginBottom: 8 }]} />
+            <View style={[styles.skeletonShimmer, { width: 180, height: 28 }]} />
+          </View>
+          <View style={[styles.skeletonShimmer, { width: 50, height: 50, borderRadius: 25 }]} />
+        </View>
+
+        {/* Search Bar */}
+        <View style={[styles.skeletonShimmer, { height: 50, borderRadius: 10, marginBottom: 20 }]} />
+
+        {/* Stats Grid */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCardSkeleton}>
+            <View style={[styles.skeletonShimmer, { width: 40, height: 24, marginBottom: 8 }]} />
+            <View style={[styles.skeletonShimmer, { width: 60, height: 14 }]} />
+          </View>
+          <View style={styles.statCardSkeleton}>
+            <View style={[styles.skeletonShimmer, { width: 60, height: 24, marginBottom: 8 }]} />
+            <View style={[styles.skeletonShimmer, { width: 70, height: 14 }]} />
+          </View>
+        </View>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statCardSkeleton}>
+            <View style={[styles.skeletonShimmer, { width: 50, height: 24, marginBottom: 8 }]} />
+            <View style={[styles.skeletonShimmer, { width: 50, height: 14 }]} />
+          </View>
+          <View style={styles.statCardSkeleton}>
+            <View style={[styles.skeletonShimmer, { width: 55, height: 24, marginBottom: 8 }]} />
+            <View style={[styles.skeletonShimmer, { width: 65, height: 14 }]} />
+          </View>
+        </View>
+
+        {/* Recent Orders Section */}
+        <View style={[styles.skeletonShimmer, { width: 150, height: 20, marginBottom: 15 }]} />
+
+        {/* Order List */}
+        {[1, 2, 3].map((item) => (
+          <View key={item} style={styles.orderCardSkeleton}>
+            <View style={styles.orderInfoSkeleton}>
+              <View style={[styles.skeletonShimmer, { width: '70%', height: 16, marginBottom: 8 }]} />
+              <View style={[styles.skeletonShimmer, { width: '50%', height: 12 }]} />
+            </View>
+            <View style={styles.orderMetaSkeleton}>
+              <View style={[styles.skeletonShimmer, { width: 80, height: 14, marginBottom: 8 }]} />
+              <View style={[styles.skeletonShimmer, { width: 60, height: 16 }]} />
+              <View style={styles.orderActionsSkeleton}>
+                <View style={[styles.skeletonShimmer, { width: 20, height: 20, borderRadius: 10 }]} />
+                <View style={[styles.skeletonShimmer, { width: 20, height: 20, borderRadius: 10 }]} />
+              </View>
+            </View>
+          </View>
+        ))}
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomMenu}>
+          {[1, 2, 3].map((item) => (
+            <View key={item} style={styles.menuItemSkeleton}>
+              <View style={[styles.skeletonShimmer, { width: 24, height: 24, borderRadius: 12 }]} />
+              <View style={[styles.skeletonShimmer, { width: 40, height: 12, marginTop: 4 }]} />
+            </View>
+          ))}
+        </View>
       </View>
-    );
-  }
+    </SafeAreaView>
+  );
+}
   // Show All the Other Data if not loading
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -621,6 +687,31 @@ orderActions: {
   height: 150,
   borderRadius: 10,
  // looks nice for videos
+},
+
+//added styles
+// Add these to your styles
+skeletonShimmer: {
+  backgroundColor: '#f0f0f0',
+  borderRadius: 4,
+  overflow: 'hidden',
+},
+statCardSkeleton: {
+  width: '48%',
+  backgroundColor: '#f8f9fa',
+  borderRadius: 15,
+  padding: 20,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.1,
+  shadowRadius: 6,
+  elevation: 3,
+},
+orderActionsSkeleton: {
+  flexDirection: 'row',
+  justifyContent: 'flex-end',
+  marginTop: 10,
+  gap: 15,
 },
 
 });

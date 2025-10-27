@@ -1,5 +1,19 @@
-import React, { useState, useEffect,useRef } from 'react';
-import { View, Text, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, Alert, SafeAreaView, StatusBar, Modal, TextInput } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  Image, 
+  StyleSheet, 
+  Dimensions, 
+  FlatList, 
+  TouchableOpacity, 
+  Alert, 
+  SafeAreaView, 
+  StatusBar, 
+  Modal, 
+  TextInput,
+  Animated
+} from 'react-native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import BASE_URL from './Config';
@@ -19,33 +33,91 @@ const ProductScreen = ({ route, navigation }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [price, setPrice] = useState(null);
   const [productid, setProductId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [mediaLoading, setMediaLoading] = useState({}); // Track individual media loading
+  const [mediaErrors, setMediaErrors] = useState({}); // Track media loading errors
   const videoRefs = useRef([]);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Combined data fetching to prevent double rendering
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch price and product ID first
+        const priceResponse = await axios.get(`${BASE_URL}/api/price/${orderReference}`);
+        setPrice(priceResponse.data.price);
+        const productId = priceResponse.data.productid;
+        setProductId(productId);
+
+        // Then check payment status with the product ID
+        const token = await AsyncStorage.getItem("userToken");
+        if (token) {
+          const paymentResponse = await axios.post(
+            `${BASE_URL}/api/checkpayment`, 
+            { productid: productId },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setIsPaid(paymentResponse.data.hasPaid);
+        }
+
+        // Fade in animation when data is ready
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }).start();
+
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+        let errorMessage = 'Failed to load product details';
+        
+        if (error.code === 'ECONNABORTED') {
+          errorMessage = 'Request timeout. Please check your connection.';
+        } else if (error.response?.status === 401) {
+          errorMessage = 'Session expired. Please login again.';
+        } else if (error.response?.status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
+        } else if (!error.response) {
+          errorMessage = 'Network error. Please check your connection.';
+        }
+        
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (orderReference) {
+      fetchAllData();
+    }
+  }, [orderReference]);
 
   // Validate phone number format
   const validatePhoneNumber = (number) => {
     const cleanedNumber = number.trim();
     
-    // Check if it starts with 255
     if (!cleanedNumber.startsWith('255')) {
       return 'Phone number must start with 255';
     }
     
-    // Check total length (255 + 9 digits = 12 characters)
     if (cleanedNumber.length !== 12) {
       return 'Phone number must be 12 digits (255 followed by 9 digits)';
     }
     
-    // Check if all characters after 255 are digits
     const digitsAfterPrefix = cleanedNumber.substring(3);
     if (!/^\d+$/.test(digitsAfterPrefix)) {
       return 'Phone number must contain only digits after 255';
     }
     
-    // Check if the digits after 255 are valid (should be 9 digits starting with 6-9)
     const operatorCode = digitsAfterPrefix.substring(0, 2);
     const validOperatorCodes = ['61', '62', '63', '64', '65', '66', '67', '68', '69', '71', '72', '73', '74', '75', '76', '77', '78', '79'];
     
@@ -53,19 +125,14 @@ const ProductScreen = ({ route, navigation }) => {
       return 'Invalid Tanzanian phone number format';
     }
     
-    return ''; // No error
+    return '';
   };
 
   // Handle phone number input change
   const handlePhoneNumberChange = (text) => {
     setPhoneNumber(text);
+    if (phoneError) setPhoneError('');
     
-    // Clear error when user starts typing
-    if (phoneError) {
-      setPhoneError('');
-    }
-    
-    // Auto-format: ensure it starts with 255
     if (text.length === 1 && !text.startsWith('255')) {
       if (text === '0') {
         setPhoneNumber('255');
@@ -73,73 +140,33 @@ const ProductScreen = ({ route, navigation }) => {
     }
   };
 
-  // Fetch product price on components mount
-  useEffect(() => {
-    const fetchPrice = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`${BASE_URL}/api/price/${orderReference}`);
-        setPrice(response.data.price);
-        setProductId(response.data.productid);
-      } catch (error) {
-        console.error('Failed to fetch price:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Handle media load start
+  const handleMediaLoadStart = (index) => {
+    setMediaLoading(prev => ({ ...prev, [index]: true }));
+    setMediaErrors(prev => ({ ...prev, [index]: false }));
+  };
 
-    fetchPrice();
-  }, [orderReference]);
+  // Handle media load end
+  const handleMediaLoadEnd = (index) => {
+    setMediaLoading(prev => ({ ...prev, [index]: false }));
+  };
 
-  // Fetch payment status 
-  useEffect(() => {
-    const FetchPaymentStatus = async () => {
-      try {
-        if (!productid) return;
-        setLoading(true);
-        const token = await AsyncStorage.getItem("userToken");
-        if (!token) {
-          console.log("No token found");
-          return;
-        }
-        const response = await axios.post(`${BASE_URL}/api/checkpayment`, 
-          { productid },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
-        if (response.data.hasPaid) {
-          setIsPaid(true);
-        }
-      } catch (error) {
-        if (error.response?.data?.error) {
-          Alert.alert("Error", error.response.data.error);
-        } else {
-          console.error("Error checking payment:", error);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    FetchPaymentStatus();
-  }, [productid]);
+  // Handle media error
+  const handleMediaError = (index, error) => {
+    console.error(`Media loading error at index ${index}:`, error);
+    setMediaLoading(prev => ({ ...prev, [index]: false }));
+    setMediaErrors(prev => ({ ...prev, [index]: true }));
+  };
 
   // Fetch Images By Product ID
   const fetchImagesByProductId = async () => {
     const token = await AsyncStorage.getItem("userToken");
-    if (!token) {
-      console.log("No token");
-      return [];
-    }
+    if (!token) return [];
+    
     try {
       const response = await axios.get(
         `${BASE_URL}/api/images/${productid}`, 
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       return response.data.images || [];
     } catch (err) {
@@ -157,7 +184,6 @@ const ProductScreen = ({ route, navigation }) => {
 
   // Handle payment for ALL images
   const handlePayment = async () => {
-    // Validate phone number format before proceeding
     const validationError = validatePhoneNumber(phoneNumber);
     if (validationError) {
       setPhoneError(validationError);
@@ -170,58 +196,48 @@ const ProductScreen = ({ route, navigation }) => {
     try {
       const token = await AsyncStorage.getItem("userToken");
       if (!token) {
-        console.log("No token");
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Please login to make payment'
+        });
         return;
       }
+
       const response = await axios.post(`${BASE_URL}/api/pay`, {
         productid,
         amount: price,
         phoneNumber: phoneNumber.trim()
       }, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 30000
       });
+
       if (response.data.success) {
-
-        
         Toast.show({
-                 type: 'success',
-                 text2: response.data.message
-               });
-               navigation.navigate('PaymentProcessingScreen')
-      } 
-    }  catch (err) {
-  //console.error('Payment request failed');
-
-  if (err.response) {
-    Toast.show({
-                 type: 'error',
-                 text2: err.response?.data?.message
-               });
-  } else if (err.request) {
-    // The request was made but no response was received
+          type: 'success',
+          text1: 'Success',
+          text2: response.data.message
+        });
+        navigation.navigate('PaymentProcessingScreen');
+      }
+    } catch (err) {
+      let errorMessage = 'Something went wrong. Try again later.';
+      
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.request) {
+        errorMessage = 'No response from server. Check your internet connection.';
+      } else if (err.code === 'ECONNABORTED') {
+        errorMessage = 'Request timeout. Please try again.';
+      }
+      
       Toast.show({
-                 type: 'error',
-                 text2: 'No response from server. Check your internet connection.'
-               });
-   
-
-   
-  } else {
-    // // Something else happened in setting up the request
-    // console.error('Error Message:', err.message);
-
-    // Alert.alert('Error', err.message);
-     Toast.show({
-                 type: 'error',
-                 text2: 'Something went Wrong,Try Again Later'
-               });
-  }
-
- // console.error('Full Error:', err);
-}
- finally {
+        type: 'error',
+        text1: 'Payment Failed',
+        text2: errorMessage
+      });
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -246,13 +262,14 @@ const ProductScreen = ({ route, navigation }) => {
         return;
       }
 
+      let successCount = 0;
       for (let img of images) {
         try {
           const fileName = img.title ? img.title : `image_${img.id}`;
           const image_url = `${BASE_URL}/${img.path}`;
           const extension = image_url.match(/\.(\w+)(?:\?|$)/);
-const fileExt = extension ? extension[1] : 'jpg';
-const safeFileName = `${fileName}.${fileExt}`;
+          const fileExt = extension ? extension[1] : 'jpg';
+          const safeFileName = `${fileName}.${fileExt}`;
 
           const fileUri = FileSystem.documentDirectory + safeFileName;
           const downloadResult = await FileSystem.downloadAsync(image_url, fileUri);
@@ -264,12 +281,20 @@ const safeFileName = `${fileName}.${fileExt}`;
           } else {
             await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
           }
+          successCount++;
         } catch (singleError) {
           console.error("Failed to download/save image:", singleError);
         }
       }
 
-      Alert.alert('Download Complete', 'All Media(s) have been downloaded successfully.');
+      if (successCount > 0) {
+        Alert.alert(
+          'Download Complete', 
+          `${successCount} out of ${images.length} media file(s) downloaded successfully.`
+        );
+      } else {
+        Alert.alert('Download Failed', 'Could not download any files. Please try again.');
+      }
     } catch (err) {
       console.error(err);
       Alert.alert('Download Error', 'Could not download images. Please try again.');
@@ -278,53 +303,88 @@ const safeFileName = `${fileName}.${fileExt}`;
     }
   };
 
-  // Render each image with watermark overlay
-const renderItem = ({ item,index }) => {
-  const fileUri = item.image?.uri || `${BASE_URL}/${item.path}`;
-  const isVideo =
-    item.fileType === 'video' ||
-    fileUri.match(/\.(mp4|mov|avi|mkv)$/i);
-
-  return (
-    <View style={styles.imageWrapper}>
-      {isVideo ? (
-        <Video
-        ref={(ref) => (videoRefs.current[index] = ref)}
-          source={{ uri: fileUri }}
-          style={styles.image}
-          resizeMode="cover"
-           shouldPlay ={currentIndex === index}// 👈 auto-play when visible
-          isLooping // 👈 loop continuously
-          useNativeControls={true}
-          
-        />
-      ) : (
-        <Image
-          source={{ uri: fileUri }}
-          style={styles.image}
-          resizeMode="cover"
-        />
-      )}
-
-      {/* 🔒 Add watermark overlay if not paid */}
-      {!isPaid && (
-        <View style={styles.watermarkContainer}>
-          <View style={styles.watermark}>
-            <Ionicons name="lock-closed" size={24} color="#fff" />
-            <Text style={styles.watermarkText}>PREVIEW</Text>
-          </View>
-        </View>
-      )}
+  // Render skeleton loader for media
+  const renderMediaSkeleton = () => (
+    <View style={styles.mediaSkeleton}>
+      <ActivityIndicator size="large" color="#4a6bff" />
+      <Text style={styles.skeletonText}>Loading media...</Text>
     </View>
   );
-};
 
+  // Render media error state
+  const renderMediaError = () => (
+    <View style={styles.mediaError}>
+      <Ionicons name="warning" size={48} color="#ff6b6b" />
+      <Text style={styles.errorText}>Failed to load media</Text>
+      <Text style={styles.errorSubtext}>Please check your connection</Text>
+    </View>
+  );
 
+  // Render each image with watermark overlay
+  const renderItem = ({ item, index }) => {
+    const fileUri = item.image?.uri || `${BASE_URL}/${item.path}`;
+    const isVideo = item.fileType === 'video' || fileUri.match(/\.(mp4|mov|avi|mkv)$/i);
+    const isLoading = mediaLoading[index];
+    const hasError = mediaErrors[index];
+
+    return (
+      <View style={styles.imageWrapper}>
+        {isVideo ? (
+          <View style={styles.videoContainer}>
+            <Video
+              ref={(ref) => (videoRefs.current[index] = ref)}
+              source={{ uri: fileUri }}
+              style={styles.image}
+              resizeMode="cover"
+              shouldPlay={currentIndex === index}
+              isLooping
+              useNativeControls={false}
+              onLoadStart={() => handleMediaLoadStart(index)}
+              onLoad={() => handleMediaLoadEnd(index)}
+              onError={(error) => handleMediaError(index, error)}
+            />
+            {isLoading && renderMediaSkeleton()}
+            {hasError && renderMediaError()}
+          </View>
+        ) : (
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: fileUri }}
+              style={styles.image}
+              resizeMode="cover"
+              onLoadStart={() => handleMediaLoadStart(index)}
+              onLoadEnd={() => handleMediaLoadEnd(index)}
+              onError={(error) => handleMediaError(index, error)}
+            />
+            {isLoading && renderMediaSkeleton()}
+            {hasError && renderMediaError()}
+          </View>
+        )}
+
+        {/* Watermark overlay if not paid */}
+        {!isPaid && (
+          <View style={styles.watermarkContainer}>
+            <View style={styles.watermark}>
+              <Ionicons name="lock-closed" size={24} color="#fff" />
+              <Text style={styles.watermarkText}>PREVIEW</Text>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Render loading screen
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.loadingScreen}>
+          <ActivityIndicator size="large" color="#4a6bff" />
+          <Text style={styles.loadingTitle}>Loading Product</Text>
+          <Text style={styles.loadingSubtitle}>Please wait...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -333,27 +393,30 @@ const renderItem = ({ item,index }) => {
       <StatusBar barStyle="dark-content" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color="#4a6bff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Products</Text>
+        <Text style={styles.headerTitle}>Product Details</Text>
         <View style={styles.placeholder} />
-      </View>
+      </Animated.View>
 
       {/* Image Carousel */}
-      <View style={styles.carouselContainer}>
+      <Animated.View style={[styles.carouselContainer, { opacity: fadeAnim }]}>
         <FlatList
           data={products}
           renderItem={renderItem}
           horizontal
           pagingEnabled
-          keyExtractor={(item, index) => index.toString()}
+          keyExtractor={(item, index) => `${item.id}_${index}`}
           showsHorizontalScrollIndicator={false}
           onScroll={e => {
             const index = Math.round(e.nativeEvent.contentOffset.x / width);
             setCurrentIndex(index);
           }}
+          initialNumToRender={1}
+          maxToRenderPerBatch={3}
+          windowSize={3}
         />
         
         {/* Image counter */}
@@ -362,40 +425,59 @@ const renderItem = ({ item,index }) => {
         </View>
 
         {/* Pagination dots */}
-        <View style={styles.dots}>
-          {products.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                currentIndex === index && styles.activeDot
-              ]}
-            />
-          ))}
-        </View>
-      </View>
+        {products.length > 1 && (
+          <View style={styles.dots}>
+            {products.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  currentIndex === index && styles.activeDot
+                ]}
+              />
+            ))}
+          </View>
+        )}
+      </Animated.View>
 
       {/* Product Info */}
-      <View style={styles.infoContainer}>
-        <Text style={styles.productTitle}>Product Collection</Text>
+      <Animated.View style={[styles.infoContainer, { opacity: fadeAnim }]}>
+        <View style={styles.statusBadge}>
+          <Ionicons 
+            name={isPaid ? "checkmark-circle" : "lock-closed"} 
+            size={16} 
+            color={isPaid ? "#2ecc71" : "#e74c3c"} 
+          />
+          <Text style={[styles.statusText, { color: isPaid ? "#2ecc71" : "#e74c3c" }]}>
+            {isPaid ? "Purchased" : "Locked"}
+          </Text>
+        </View>
+
+        <Text style={styles.productTitle}>Premium Collection</Text>
         <Text style={styles.productDescription}>
-          {products.length} media file(s) (images/videos) available for download after purchase
+          {products.length} high-quality media file(s) available for download
         </Text>
         
         <View style={styles.priceContainer}>
           <Text style={styles.priceLabel}>Total Price:</Text>
-          <Text style={styles.price}>{price}</Text>
+          <View style={styles.priceWrapper}>
+            <Text style={styles.price}>{price} TZS</Text>
+            {!isPaid && (
+              <Text style={styles.originalPrice}>{parseInt(price) + 500} TZS</Text>
+            )}
+          </View>
         </View>
         
-        {/* Processing charges message */}
         <View style={styles.chargesNote}>
           <Ionicons name="information-circle" size={16} color="#666" />
-          <Text style={styles.chargesText}>Processing charges will be added</Text>
+          <Text style={styles.chargesText}>
+            {isPaid ? "You have full access to download all media" : "Processing charges will be added"}
+          </Text>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Action Button */}
-      <View style={styles.actionContainer}>
+      <Animated.View style={[styles.actionContainer, { opacity: fadeAnim }]}>
         {!isPaid ? (
           <TouchableOpacity 
             style={[styles.payButton, isProcessing && styles.disabledButton]} 
@@ -404,13 +486,13 @@ const renderItem = ({ item,index }) => {
           >
             {isProcessing ? (
               <View style={styles.loadingContainer}>
-                <Ionicons name="refresh" size={20} color="#fff" style={styles.spinning} />
+                <ActivityIndicator size="small" color="#fff" />
                 <Text style={styles.payButtonText}>Processing...</Text>
               </View>
             ) : (
               <View style={styles.buttonContent}>
                 <Ionicons name="lock-open" size={20} color="#fff" />
-                <Text style={styles.payButtonText}>Unlock All Medias</Text>
+                <Text style={styles.payButtonText}>Unlock All Media</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -422,18 +504,18 @@ const renderItem = ({ item,index }) => {
           >
             {isProcessing ? (
               <View style={styles.loadingContainer}>
-                <Ionicons name="refresh" size={20} color="#fff" style={styles.spinning} />
+                <ActivityIndicator size="small" color="#fff" />
                 <Text style={styles.downloadButtonText}>Preparing Downloads...</Text>
               </View>
             ) : (
               <View style={styles.buttonContent}>
                 <Ionicons name="download" size={20} color="#fff" />
-                <Text style={styles.downloadButtonText}>Download All</Text>
+                <Text style={styles.downloadButtonText}>Download All ({products.length})</Text>
               </View>
             )}
           </TouchableOpacity>
         )}
-      </View>
+      </Animated.View>
 
       {/* Phone Number Modal */}
       <Modal
@@ -442,35 +524,58 @@ const renderItem = ({ item,index }) => {
         visible={phoneModalVisible}
         onRequestClose={() => setPhoneModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter Your Phone Number</Text>
-            <Text style={styles.modalSubtitle}>We need your phone number to process the payment</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Enter Phone Number</Text>
+              <TouchableOpacity 
+                onPress={() => setPhoneModalVisible(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
             
-            <TextInput
-              style={[styles.phoneInput, phoneError && styles.phoneInputError]}
-              placeholder="e.g., 255712345678"
-              keyboardType="phone-pad"
-              value={phoneNumber}
-              onChangeText={handlePhoneNumberChange}
-              autoFocus={true}
-              maxLength={12}
-            />
+            <Text style={styles.modalSubtitle}>We'll send a payment request to this number</Text>
             
-            {phoneError ? (
-              <Text style={styles.errorText}>
-                <Ionicons name="warning" size={14} color="#ff3b30" /> {phoneError}
-              </Text>
-            ) : (
-              <Text style={styles.helperText}>
-                Format: 255 followed by 9 digits (e.g., 255712345678)
-              </Text>
-            )}
+            <View style={styles.phoneInputContainer}>
+              <Text style={styles.phoneLabel}>Phone Number</Text>
+              <TextInput
+                style={[styles.phoneInput, phoneError && styles.phoneInputError]}
+                placeholder="255712345678"
+                keyboardType="phone-pad"
+                value={phoneNumber}
+                onChangeText={handlePhoneNumberChange}
+                autoFocus={true}
+                maxLength={12}
+              />
+              
+              {phoneError ? (
+                <Text style={styles.errorText}>
+                  <Ionicons name="warning" size={14} color="#ff3b30" /> {phoneError}
+                </Text>
+              ) : (
+                <Text style={styles.helperText}>
+                  Format: 255 followed by 9 digits
+                </Text>
+              )}
+            </View>
             
-            <Text style={styles.chargesNoteModal}>
-              <Ionicons name="information-circle" size={16} color="#666" />
-              Processing charges will be added to your payment
-            </Text>
+            <View style={styles.paymentSummary}>
+              <Text style={styles.summaryTitle}>Payment Summary</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Product Price</Text>
+                <Text style={styles.summaryValue}>{price} TZS</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Processing Fee</Text>
+                <Text style={styles.summaryValue}>500 TZS</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.totalRow]}>
+                <Text style={styles.totalLabel}>Total</Text>
+                <Text style={styles.totalValue}>{parseInt(price) + 500} TZS</Text>
+              </View>
+            </View>
             
             <View style={styles.modalButtons}>
               <TouchableOpacity 
@@ -481,11 +586,13 @@ const renderItem = ({ item,index }) => {
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton, phoneError && styles.disabledConfirmButton]}
+                style={[styles.modalButton, styles.confirmButton, (phoneError || !phoneNumber) && styles.disabledConfirmButton]}
                 onPress={handlePayment}
-                disabled={!!phoneError}
+                disabled={!!phoneError || !phoneNumber}
               >
-                <Text style={styles.confirmButtonText}>Pay Now</Text>
+                <Text style={styles.confirmButtonText}>
+                  Pay {parseInt(price) + 500} TZS
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -502,6 +609,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  loadingScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  loadingTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+  },
+  loadingSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -511,13 +635,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eaeaea',
     backgroundColor: '#fff',
-    marginTop:22,
+    marginTop: 0,
   },
   backButton: {
     padding: 4,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: '#4a6bff',
   },
@@ -527,6 +651,7 @@ const styles = StyleSheet.create({
   carouselContainer: {
     height: height * 0.45,
     position: 'relative',
+    backgroundColor: '#000',
   },
   imageWrapper: {
     width,
@@ -534,12 +659,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-    backgroundColor: '#000',
+  },
+  videoContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  imageContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
   },
   image: {
     width: '100%',
     height: '100%',
-    opacity: 0.9,
+  },
+  mediaSkeleton: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  skeletonText: {
+    color: '#fff',
+    marginTop: 8,
+    fontSize: 14,
+  },
+  mediaError: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  errorSubtext: {
+    color: '#ccc',
+    fontSize: 14,
+    marginTop: 4,
   },
   watermarkContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -556,7 +717,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   watermarkText: {
-    fontSize: 18,
+    fontSize: 90,
     fontWeight: '600',
     color: '#fff',
   },
@@ -600,6 +761,21 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
   productTitle: {
     fontSize: 22,
     fontWeight: '700',
@@ -620,20 +796,30 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
+  priceWrapper: {
+    alignItems: 'flex-end',
+  },
   priceLabel: {
     fontSize: 16,
     color: '#666',
+    fontWeight: '500',
   },
   price: {
     fontSize: 20,
     fontWeight: '700',
     color: '#2ecc71',
   },
+  originalPrice: {
+    fontSize: 14,
+    color: '#999',
+    textDecorationLine: 'line-through',
+    marginTop: 2,
+  },
   chargesNote: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
-    padding: 8,
+    padding: 12,
     backgroundColor: '#f9f9f9',
     borderRadius: 8,
   },
@@ -641,6 +827,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontSize: 14,
     color: '#666',
+    flex: 1,
   },
   actionContainer: {
     padding: 20,
@@ -681,9 +868,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  spinning: {
-    transform: [{ rotate: '0deg' }],
-  },
   payButtonText: {
     color: '#fff',
     fontSize: 18,
@@ -695,38 +879,56 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   // Modal styles
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 20,
   },
   modalContent: {
-    width: '85%',
+    width: '100%',
+    maxWidth: 400,
     backgroundColor: 'white',
     borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
+    color: '#333',
+  },
+  modalCloseButton: {
+    padding: 4,
   },
   modalSubtitle: {
     fontSize: 14,
     color: '#666',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  phoneInputContainer: {
+    paddingHorizontal: 20,
     marginBottom: 20,
-    textAlign: 'center',
+  },
+  phoneLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
   },
   phoneInput: {
     width: '100%',
@@ -735,29 +937,80 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     fontSize: 16,
-    marginBottom: 16,
+    backgroundColor: '#f8f9fa',
   },
-  chargesNoteModal: {
+  phoneInputError: {
+    borderColor: '#ff3b30',
+    backgroundColor: '#fff5f5',
+  },
+  errorText: {
+    color: '#ff3b30',
+    fontSize: 12,
+    marginTop: 8,
+  },
+  helperText: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 8,
+  },
+  paymentSummary: {
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  summaryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    paddingTop: 12,
+    marginTop: 4,
+  },
+  summaryLabel: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 20,
+  },
+  summaryValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2ecc71',
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
+    padding: 20,
+    gap: 12,
   },
   modalButton: {
     flex: 1,
-    padding: 14,
-    borderRadius: 10,
+    padding: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    marginHorizontal: 5,
   },
   cancelButton: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   confirmButton: {
     backgroundColor: '#3498db',
@@ -765,31 +1018,12 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: '#666',
     fontWeight: '600',
+    fontSize: 16,
   },
   confirmButtonText: {
     color: 'white',
     fontWeight: '600',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-   phoneInputError: {
-    borderColor: '#ff3b30',
-    borderWidth: 1,
-  },
-  errorText: {
-    color: '#ff3b30',
-    fontSize: 12,
-    marginTop: 5,
-    textAlign: 'center',
-  },
-  helperText: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 5,
-    textAlign: 'center',
+    fontSize: 16,
   },
   disabledConfirmButton: {
     backgroundColor: '#cccccc',

@@ -17,7 +17,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  Animated
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -25,7 +26,7 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
-import { Video } from 'expo-av';
+import { Video, AVPlaybackStatus } from 'expo-av';
 import CustomActivityIndicator from './CustomActivityIndicator';
 import BASE_URL from './Config';
 
@@ -45,6 +46,8 @@ const FeedScreen = () => {
   const videoRefs = useRef({});
   const flatListRef = useRef(null);
   const [visiblePosts, setVisiblePosts] = useState(new Set());
+  const [videoProgress, setVideoProgress] = useState({});
+  const [commentLoading, setCommentLoading] = useState({});
   
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,6 +55,8 @@ const FeedScreen = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchError, setSearchError] = useState(null);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchFeed();
@@ -93,7 +98,7 @@ const FeedScreen = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${userToken}`,
         },
-        timeout: 10000 // 10 second timeout
+        timeout: 10000
       });
 
       setFeedData(response.data.feed);
@@ -102,6 +107,13 @@ const FeedScreen = () => {
         initialLikedPosts[post.id] = post.hasliked;
       });
       setLikedPosts(initialLikedPosts);
+
+      // Fade in animation
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
 
     } catch (error) {
       console.error('Fetch feed error:', error);
@@ -175,10 +187,8 @@ const FeedScreen = () => {
   const handleDesignerSelect = (designer) => {
     setShowSearchResults(false);
     setSearchQuery('');
-    // Navigate to profile screen with designer ID
     navigation.navigate('FeedProfileScreen', { 
       designer: designer.id,
-      
     });
   };
 
@@ -190,12 +200,12 @@ const FeedScreen = () => {
     setSearchError(null);
   };
 
-//fetch designer feeds on focus
+  // Fetch designer feeds on focus
   useFocusEffect(
-  useCallback(() => {
-    fetchFeed(false); // explicitly pass false or omit it if false is the default
-  }, [])
-);
+    useCallback(() => {
+      fetchFeed(false);
+    }, [])
+  );
 
   const onRefresh = () => {
     fetchFeed(true);
@@ -215,6 +225,17 @@ const FeedScreen = () => {
     const videoKey = `${feedId}-${index}`;
     if (videoRefs.current[videoKey]) {
       videoRefs.current[videoKey].playAsync();
+    }
+  };
+
+  // Handle video playback status update
+  const handlePlaybackStatusUpdate = (feedId, index, status) => {
+    if (status.isLoaded) {
+      const progress = status.positionMillis / status.durationMillis || 0;
+      setVideoProgress(prev => ({
+        ...prev,
+        [`${feedId}-${index}`]: progress
+      }));
     }
   };
 
@@ -241,21 +262,38 @@ const FeedScreen = () => {
   }).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-    minimumViewTime: 100,
+    itemVisiblePercentThreshold: 80,
+    minimumViewTime: 150,
   }).current;
 
+  // Enhanced time formatting
   const formatDate = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
-    const diffInHours = Math.floor((now - date) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) {
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    const diffInMonths = Math.floor(diffInDays / 30);
+    const diffInYears = Math.floor(diffInDays / 365);
+
+    if (diffInSeconds < 60) {
       return 'Just now';
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes}m ago`;
     } else if (diffInHours < 24) {
       return `${diffInHours}h ago`;
+    } else if (diffInDays === 1) {
+      return 'Yesterday';
+    } else if (diffInDays < 7) {
+      return `${diffInDays}d ago`;
+    } else if (diffInWeeks < 4) {
+      return `${diffInWeeks}w ago`;
+    } else if (diffInMonths < 12) {
+      return `${diffInMonths}mo ago`;
     } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return `${diffInYears}y ago`;
     }
   };
 
@@ -283,6 +321,7 @@ const FeedScreen = () => {
       const currentPost = feedData.find(post => post.id === postId);
       const currentLikesCount = currentPost?.likesCount || 0;
 
+      // Optimistic update
       setLikedPosts(prev => ({
         ...prev,
         [postId]: !prev[postId]
@@ -326,6 +365,7 @@ const FeedScreen = () => {
     } catch (error) {
       console.error('Error toggling like:', error);
       
+      // Revert on error
       const currentPost = feedData.find(post => post.id === postId);
       const currentLikesCount = currentPost?.likesCount || 0;
       const currentLikedStatus = likedPosts[postId];
@@ -435,6 +475,7 @@ const FeedScreen = () => {
       }));
 
       setNewComment('');
+      setCommentLoading(prev => ({ ...prev, [selectedPost.id]: true }));
 
       const payload = {
         text: newComment.trim(),
@@ -497,12 +538,58 @@ const FeedScreen = () => {
       }
 
       Alert.alert('Error', 'Failed to post comment. Please try again.');
+    } finally {
+      setCommentLoading(prev => ({ ...prev, [selectedPost.id]: false }));
     }
   };
 
   const isVideoFile = (url) => {
     return url.toLowerCase().endsWith('.mp4') || url.toLowerCase().endsWith('.mov') || url.toLowerCase().endsWith('.avi');
   };
+
+  // Render skeleton for feed items
+  const renderFeedSkeleton = () => (
+    <View style={styles.feedSkeleton}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonAvatar} />
+        <View style={styles.skeletonUserInfo}>
+          <View style={[styles.skeletonText, { width: '60%', height: 16 }]} />
+          <View style={[styles.skeletonText, { width: '40%', height: 14, marginTop: 6 }]} />
+        </View>
+      </View>
+      <View style={styles.skeletonMedia}>
+        <View style={styles.skeletonImage} />
+      </View>
+      <View style={styles.skeletonActions}>
+        <View style={styles.skeletonActionButtons}>
+          <View style={[styles.skeletonButton, { width: 40 }]} />
+          <View style={[styles.skeletonButton, { width: 40 }]} />
+          <View style={[styles.skeletonButton, { width: 40 }]} />
+        </View>
+      </View>
+      <View style={styles.skeletonEngagement}>
+        <View style={[styles.skeletonText, { width: '30%', height: 14 }]} />
+      </View>
+      <View style={styles.skeletonComments}>
+        <View style={[styles.skeletonText, { width: '80%', height: 14 }]} />
+        <View style={[styles.skeletonText, { width: '60%', height: 14, marginTop: 4 }]} />
+      </View>
+    </View>
+  );
+
+  // Render skeleton for comments
+  const renderCommentSkeleton = () => (
+    <View style={styles.commentSkeleton}>
+      <View style={styles.skeletonCommentAvatar} />
+      <View style={styles.skeletonCommentContent}>
+        <View style={styles.skeletonCommentHeader}>
+          <View style={[styles.skeletonText, { width: '40%', height: 14 }]} />
+          <View style={[styles.skeletonText, { width: '20%', height: 12 }]} />
+        </View>
+        <View style={[styles.skeletonText, { width: '80%', height: 14, marginTop: 6 }]} />
+      </View>
+    </View>
+  );
 
   // Render search result item
   const renderSearchResultItem = ({ item }) => (
@@ -556,8 +643,9 @@ const FeedScreen = () => {
   // Render loading state
   const renderLoading = () => (
     <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#4a6bff" />
-      <Text style={styles.loadingText}>Loading feeds...</Text>
+      {[1, 2, 3].map((item) => (
+        <View key={item}>{renderFeedSkeleton()}</View>
+      ))}
     </View>
   );
 
@@ -565,6 +653,7 @@ const FeedScreen = () => {
     const isVideo = isVideoFile(item.image);
     const isPostVisible = visiblePosts.has(feedId);
     const isActiveItem = activeIndexes[feedId] === index;
+    const progress = videoProgress[`${feedId}-${index}`] || 0;
     
     return (
       <View style={styles.workItem}>
@@ -577,8 +666,22 @@ const FeedScreen = () => {
               resizeMode="cover"
               shouldPlay={isPostVisible && isActiveItem}
               isLooping
-              useNativeControls
+              useNativeControls={false}
+              onPlaybackStatusUpdate={(status) => 
+                handlePlaybackStatusUpdate(feedId, index, status)
+              }
             />
+            
+            {/* Video Progress Bar */}
+            <View style={styles.progressBarContainer}>
+              <View 
+                style={[
+                  styles.progressBar,
+                  { width: `${progress * 100}%` }
+                ]} 
+              />
+            </View>
+
             {!isPostVisible && (
               <TouchableOpacity 
                 style={styles.playButton}
@@ -615,7 +718,7 @@ const FeedScreen = () => {
   const renderCommentItem = ({ item }) => (
     <View style={styles.commentItem}>
       <Image 
-        source={{ uri: item.user.avatar || 'https://www.istockphoto.com/vector/user-icon-flat-isolated-on-white-background-user-symbol-vector-illustration-gm1300845620-393045799' }} 
+        source={{ uri: item.user.avatar || 'https://via.placeholder.com/36' }} 
         style={styles.commentAvatar} 
       />
       <View style={styles.commentContent}>
@@ -646,7 +749,7 @@ const FeedScreen = () => {
     const isLiked = likedPosts[item.id];
 
     return (
-      <View style={styles.feedItem}>
+      <Animated.View style={[styles.feedItem, { opacity: fadeAnim }]}>
         {/* Header with profile info */}
         <View style={styles.header}>
           <TouchableOpacity 
@@ -692,6 +795,9 @@ const FeedScreen = () => {
               );
               updateActiveIndex(item.id, newIndex);
             }}
+            decelerationRate="fast"
+            snapToInterval={screenWidth}
+            snapToAlignment="center"
           />
           
           {/* Media counter for multiple items */}
@@ -783,7 +889,7 @@ const FeedScreen = () => {
             {formatDate(item.timestamp)}
           </Text>
         </View>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -881,6 +987,11 @@ const FeedScreen = () => {
         decelerationRate="fast"
         snapToInterval={screenHeight * 0.8}
         snapToAlignment="start"
+        initialNumToRender={3}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        removeClippedSubviews={true}
+        updateCellsBatchingPeriod={50}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -921,6 +1032,18 @@ const FeedScreen = () => {
                 selectedPost.comments.length === 0 && styles.emptyCommentsListContent
               ]}
               ListEmptyComponent={renderEmptyComments}
+              ListHeaderComponent={
+                commentLoading[selectedPost.id] && (
+                  <View style={styles.commentLoadingContainer}>
+                    {[1, 2, 3].map((item) => (
+                      <View key={item}>{renderCommentSkeleton()}</View>
+                    ))}
+                  </View>
+                )
+              }
+              initialNumToRender={10}
+              maxToRenderPerBatch={10}
+              windowSize={5}
             />
           )}
 
@@ -938,14 +1061,18 @@ const FeedScreen = () => {
                 !newComment.trim() && styles.postCommentButtonDisabled
               ]}
               onPress={addComment}
-              disabled={!newComment.trim()}
+              disabled={!newComment.trim() || commentLoading[selectedPost?.id]}
             >
-              <Text style={[
-                styles.postCommentText,
-                !newComment.trim() && styles.postCommentTextDisabled
-              ]}>
-                Post
-              </Text>
+              {commentLoading[selectedPost?.id] ? (
+                <ActivityIndicator size="small" color="#999" />
+              ) : (
+                <Text style={[
+                  styles.postCommentText,
+                  !newComment.trim() && styles.postCommentTextDisabled
+                ]}>
+                  Post
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -1472,6 +1599,161 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 0
+  },
+   // Feed Skeleton Styles - Full Width
+  feedSkeleton: {
+    backgroundColor: 'white',
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    width: screenWidth, // Full width
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16, // Add horizontal padding
+    paddingVertical: 16,
+    width: screenWidth, // Full width
+  },
+  skeletonAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f0f0f0',
+    marginRight: 12,
+  },
+  skeletonUserInfo: {
+    flex: 1,
+  },
+  skeletonText: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+  },
+  skeletonMedia: {
+    width: screenWidth, // Full width
+    marginBottom: 0, // Remove margin
+  },
+  skeletonImage: {
+    width: screenWidth, // Full width
+    height: 450,
+    backgroundColor: '#f0f0f0',
+  },
+  skeletonActions: {
+    paddingHorizontal: 16, // Add horizontal padding
+    paddingVertical: 12,
+    width: screenWidth, // Full width
+  },
+  skeletonActionButtons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  skeletonButton: {
+    height: 24,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+  },
+  skeletonEngagement: {
+    paddingHorizontal: 16, // Add horizontal padding
+    paddingBottom: 8,
+    width: screenWidth, // Full width
+  },
+  skeletonComments: {
+    paddingHorizontal: 16, // Add horizontal padding
+    paddingBottom: 8,
+    width: screenWidth, // Full width
+  },
+
+  // Comment Skeleton Styles - Full Width
+  commentSkeleton: {
+    flexDirection: 'row',
+    paddingHorizontal: 16, // Full width padding
+    paddingVertical: 12,
+    width: screenWidth, // Full width
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8f8f8',
+  },
+  skeletonCommentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0f0f0',
+    marginRight: 12,
+  },
+  skeletonCommentContent: {
+    flex: 1,
+  },
+  skeletonCommentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+
+  // Update the loading container to be full width
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+
+  // Update feed item to match skeleton width
+  feedItem: {
+    backgroundColor: 'white',
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    width: screenWidth, // Make actual feed items full width too
+  },
+
+  // Update header to be full width
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    width: screenWidth, // Full width
+  },
+
+  // Update carousel container to be full width
+  carouselContainer: {
+    position: 'relative',
+    width: screenWidth, // Full width
+  },
+
+  // Update work item to be full width
+  workItem: {
+    width: screenWidth, // Full width
+    paddingBottom: 16,
+  },
+
+  // Update action bar to be full width
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    width: screenWidth, // Full width
+  },
+
+  // Update engagement to be full width
+  engagement: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    width: screenWidth, // Full width
+  },
+
+  // Update comment preview to be full width
+  commentPreview: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    width: screenWidth, // Full width
+  },
+
+  // Update timestamp to be full width
+  timestamp: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    width: screenWidth, // Full width
   },
 });
 
