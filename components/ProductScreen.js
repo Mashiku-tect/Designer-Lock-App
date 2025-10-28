@@ -12,7 +12,9 @@ import {
   StatusBar, 
   Modal, 
   TextInput,
-  Animated
+  Animated,
+  ToastAndroid,
+  Platform
 } from 'react-native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,13 +24,45 @@ import { ActivityIndicator } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { Video } from 'expo-av';
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
 import Toast from 'react-native-toast-message';
 
 const { width, height } = Dimensions.get('window');
 
+const MOBILE_MONEY_FEES = [
+  { min: 100, max: 999, fee: 52 },
+  { min: 1000, max: 1999, fee: 72 },
+  { min: 2000, max: 2999, fee: 104 },
+  { min: 3000, max: 3999, fee: 116 },
+  { min: 4000, max: 4999, fee: 168 },
+  { min: 5000, max: 6999, fee: 234 },
+  { min: 7000, max: 7999, fee: 360 },
+  { min: 8000, max: 9999, fee: 430 },
+  { min: 10000, max: 14999, fee: 642 },
+  { min: 15000, max: 19999, fee: 680 },
+  { min: 20000, max: 29999, fee: 700 },
+  { min: 30000, max: 39999, fee: 980 },
+  { min: 40000, max: 49999, fee: 1038 },
+  { min: 50000, max: 99999, fee: 1460 },
+  { min: 100000, max: 199999, fee: 1868 },
+  { min: 200000, max: 299999, fee: 2220 },
+  { min: 300000, max: 399999, fee: 3180 },
+  { min: 400000, max: 499999, fee: 3764 },
+  { min: 500000, max: 599999, fee: 4672 },
+  { min: 600000, max: 699999, fee: 5712 },
+  { min: 700000, max: 799999, fee: 6560 },
+  { min: 800000, max: 899999, fee: 7800 },
+  { min: 900000, max: 1000000, fee: 8508 },
+  { min: 1000001, max: 3000000, fee: 9346 },
+  { min: 3000001, max: 5000000, fee: 9890 }
+];
+
 const ProductScreen = ({ route, navigation }) => {
   const { products = [], orderReference } = route.params || {};
   const [isPaid, setIsPaid] = useState(false);
+   const { colors, isDarkMode } = useTheme(); // Add this line
+          const styles = createStyles(colors, isDarkMode);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [price, setPrice] = useState(null);
@@ -41,6 +75,7 @@ const ProductScreen = ({ route, navigation }) => {
   const [mediaErrors, setMediaErrors] = useState({}); // Track media loading errors
   const videoRefs = useRef([]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
 
   // Combined data fetching to prevent double rendering
   useEffect(() => {
@@ -73,7 +108,7 @@ const ProductScreen = ({ route, navigation }) => {
         }).start();
 
       } catch (error) {
-        console.error('Failed to fetch data:', error);
+       // console.error('Failed to fetch data:', error);
         let errorMessage = 'Failed to load product details';
         
         if (error.code === 'ECONNABORTED') {
@@ -85,12 +120,20 @@ const ProductScreen = ({ route, navigation }) => {
         } else if (!error.response) {
           errorMessage = 'Network error. Please check your connection.';
         }
-        
-        Toast.show({
+
+        if(Platform.OS==='android'){
+          ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+          return;
+        }else{
+ Toast.show({
           type: 'error',
           text1: 'Error',
           text2: errorMessage
         });
+        return;
+        }
+        
+       
       } finally {
         setLoading(false);
       }
@@ -170,10 +213,31 @@ const ProductScreen = ({ route, navigation }) => {
       );
       return response.data.images || [];
     } catch (err) {
-      console.error("Error fetching image list:", err);
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Error fetching image list', ToastAndroid.SHORT);
+        return [];
+      }else{
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Error fetching image list'
+      });
       return [];
+      }
+      //console.error("Error fetching image list:", err);
+     // return [];
     }
   };
+
+  //find processing charges based on price
+  // Calculate mobile money fee based on amount
+const calculateProcessingFee = (amount) => {
+  const numericAmount = parseInt(amount);
+  const feeRange = MOBILE_MONEY_FEES.find(range => 
+    numericAmount >= range.min && numericAmount <= range.max
+  );
+  return feeRange ? feeRange.fee : 9346; // Default fee for amounts above 5,000,000
+};
 
   // Show phone number modal before payment
   const initiatePayment = () => {
@@ -196,12 +260,17 @@ const ProductScreen = ({ route, navigation }) => {
     try {
       const token = await AsyncStorage.getItem("userToken");
       if (!token) {
+        if(Platform.OS==='android'){
+          ToastAndroid.show('Please login to make payment', ToastAndroid.SHORT);
+          return;
+        }else{
         Toast.show({
           type: 'error',
           text1: 'Error',
           text2: 'Please login to make payment'
         });
         return;
+      }
       }
 
       const response = await axios.post(`${BASE_URL}/api/pay`, {
@@ -214,12 +283,19 @@ const ProductScreen = ({ route, navigation }) => {
       });
 
       if (response.data.success) {
+        if(Platform.OS==='android'){
+          ToastAndroid.show(response.data.message, ToastAndroid.LONG);
+          navigation.navigate('PaymentProcessingScreen');
+          return;
+        }else{
         Toast.show({
           type: 'success',
           text1: 'Success',
           text2: response.data.message
         });
         navigation.navigate('PaymentProcessingScreen');
+        return;
+      }
       }
     } catch (err) {
       let errorMessage = 'Something went wrong. Try again later.';
@@ -231,12 +307,17 @@ const ProductScreen = ({ route, navigation }) => {
       } else if (err.code === 'ECONNABORTED') {
         errorMessage = 'Request timeout. Please try again.';
       }
-      
+       if(Platform.OS==='android'){
+        ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+        return;
+        }else{
       Toast.show({
         type: 'error',
         text1: 'Payment Failed',
         text2: errorMessage
       });
+      return;
+    }
     } finally {
       setIsProcessing(false);
     }
@@ -244,22 +325,54 @@ const ProductScreen = ({ route, navigation }) => {
 
   const handleDownloadAll = async () => {
     if (!isPaid) {
-      Alert.alert('Payment Required', 'You need to complete payment first.');
+      if(Platform.OS==='android'){
+        ToastAndroid.show('You need to complete payment first.', ToastAndroid.SHORT);
+        return;
+      }else{
+        Toast.show({
+          type: 'info',
+          text1: 'Payment Required',
+          text2: 'You need to complete payment first.'
+        });
+
+      //Alert.alert('Payment Required', 'You need to complete payment first.');
       return;
+      }
     }
     
     setIsProcessing(true);
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission required', 'Permission to access storage is required to download images');
+        if(Platform.OS==='android'){
+          ToastAndroid.show('Permission to access storage is required to download images', ToastAndroid.LONG);
+          return;
+        }else{
+          Toast.show({
+            type: 'error',
+            text1: 'Permission Required',
+            text2: 'Permission to access storage is required to download images'
+          });
+        //Alert.alert('Permission required', 'Permission to access storage is required to download images');
         return;
+        }
       }
 
       const images = await fetchImagesByProductId();
       if (images.length === 0) {
-        Alert.alert('No images', 'No images found for this product');
+        if(Platform.OS==='android'){
+          ToastAndroid.show('No images found for this product', ToastAndroid.SHORT);
+          return;
+        }else{
+        Toast.show({
+          type: 'info',
+          text1: 'No Images',
+          text2: 'No images found for this product'
+        });
+
+        //Alert.alert('No images', 'No images found for this product');
         return;
+      }
       }
 
       let successCount = 0;
@@ -288,16 +401,46 @@ const ProductScreen = ({ route, navigation }) => {
       }
 
       if (successCount > 0) {
-        Alert.alert(
-          'Download Complete', 
-          `${successCount} out of ${images.length} media file(s) downloaded successfully.`
-        );
+        if(Platform.OS==='android'){
+          ToastAndroid.show(`${successCount} out of ${images.length} media file(s) downloaded successfully.`, ToastAndroid.LONG);
+          return;
+        }else{
+        Toast.show({
+          type: 'success',
+          text1: 'Download Complete',
+          text2: `${successCount} out of ${images.length} media file(s) downloaded successfully.`
+        });
+        return;
+      }
+        
       } else {
-        Alert.alert('Download Failed', 'Could not download any files. Please try again.');
+        if(Platform.OS==='android'){
+          ToastAndroid.show('Could not download any files. Please try again.', ToastAndroid.LONG);
+          return;
+        }else{
+        Toast.show({
+          type: 'error',
+          text1: 'Download Failed',
+          text2: 'Could not download any files. Please try again.'
+        });
+        return;
+      }
+        //Alert.alert('Download Failed', 'Could not download any files. Please try again.');
       }
     } catch (err) {
-      console.error(err);
-      Alert.alert('Download Error', 'Could not download images. Please try again.');
+     // console.error(err);
+      //Alert.alert('Download Error', 'Could not download images. Please try again.');
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Could not download images. Please try again.', ToastAndroid.LONG);
+        return;
+      }else{
+      Toast.show({
+        type: 'error',
+        text1: 'Download Error',
+        text2: 'Could not download images. Please try again.'
+      });
+      return;
+    }
     } finally {
       setIsProcessing(false);
     }
@@ -390,7 +533,7 @@ const ProductScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      {/* <StatusBar barStyle="dark-content" /> */}
       
       {/* Header */}
       <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
@@ -462,9 +605,7 @@ const ProductScreen = ({ route, navigation }) => {
           <Text style={styles.priceLabel}>Total Price:</Text>
           <View style={styles.priceWrapper}>
             <Text style={styles.price}>{price} TZS</Text>
-            {!isPaid && (
-              <Text style={styles.originalPrice}>{parseInt(price) + 500} TZS</Text>
-            )}
+            
           </View>
         </View>
         
@@ -569,11 +710,11 @@ const ProductScreen = ({ route, navigation }) => {
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Processing Fee</Text>
-                <Text style={styles.summaryValue}>500 TZS</Text>
+                <Text style={styles.summaryValue}>{calculateProcessingFee(price)} TZS</Text>
               </View>
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{parseInt(price) + 500} TZS</Text>
+                <Text style={styles.totalValue}>{parseInt(price) + calculateProcessingFee(price)} TZS</Text>
               </View>
             </View>
             
@@ -591,7 +732,7 @@ const ProductScreen = ({ route, navigation }) => {
                 disabled={!!phoneError || !phoneNumber}
               >
                 <Text style={styles.confirmButtonText}>
-                  Pay {parseInt(price) + 500} TZS
+                  Pay {parseInt(price) + calculateProcessingFee(price)} TZS
                 </Text>
               </TouchableOpacity>
             </View>
@@ -604,26 +745,26 @@ const ProductScreen = ({ route, navigation }) => {
 
 export default ProductScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   loadingScreen: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   loadingTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginTop: 16,
   },
   loadingSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 8,
   },
   header: {
@@ -633,8 +774,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eaeaea',
-    backgroundColor: '#fff',
+    borderBottomColor: colors.border,
+    backgroundColor: colors.card,
     marginTop: 0,
   },
   backButton: {
@@ -643,7 +784,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   placeholder: {
     width: 36,
@@ -651,7 +792,7 @@ const styles = StyleSheet.create({
   carouselContainer: {
     height: height * 0.45,
     position: 'relative',
-    backgroundColor: '#000',
+    backgroundColor: colors.black,
   },
   imageWrapper: {
     width,
@@ -681,7 +822,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.8)',
   },
   skeletonText: {
-    color: '#fff',
+    color: colors.white,
     marginTop: 8,
     fontSize: 14,
   },
@@ -692,13 +833,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.8)',
   },
   errorText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
     marginTop: 8,
   },
   errorSubtext: {
-    color: '#ccc',
+    color: colors.gray400,
     fontSize: 14,
     marginTop: 4,
   },
@@ -719,7 +860,7 @@ const styles = StyleSheet.create({
   watermarkText: {
     fontSize: 90,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
   },
   dots: {
     flexDirection: 'row',
@@ -737,7 +878,7 @@ const styles = StyleSheet.create({
     margin: 4,
   },
   activeDot: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     width: 20,
   },
   imageCounter: {
@@ -750,13 +891,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   counterText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '500',
   },
   infoContainer: {
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     marginTop: 8,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -765,7 +906,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
@@ -775,16 +916,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
+    color: colors.text,
   },
   productTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#333',
+    color: colors.text,
     marginBottom: 8,
   },
   productDescription: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     lineHeight: 22,
     marginBottom: 16,
   },
@@ -794,24 +936,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.border,
   },
   priceWrapper: {
     alignItems: 'flex-end',
   },
   priceLabel: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   price: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#2ecc71',
+    color: colors.success,
   },
   originalPrice: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     textDecorationLine: 'line-through',
     marginTop: 2,
   },
@@ -820,36 +962,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
     padding: 12,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: colors.surface,
     borderRadius: 8,
   },
   chargesText: {
     marginLeft: 6,
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     flex: 1,
   },
   actionContainer: {
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
   },
   payButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: colors.info,
     padding: 18,
     borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#3498db',
+    shadowColor: colors.info,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 5,
   },
   downloadButton: {
-    backgroundColor: '#2ecc71',
+    backgroundColor: colors.success,
     padding: 18,
     borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#2ecc71',
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -869,12 +1011,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   payButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 18,
     fontWeight: '600',
   },
   downloadButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 18,
     fontWeight: '600',
   },
@@ -889,10 +1031,10 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -904,19 +1046,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
   },
   modalCloseButton: {
     padding: 4,
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
@@ -927,35 +1069,36 @@ const styles = StyleSheet.create({
   phoneLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 8,
   },
   phoneInput: {
     width: '100%',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.borderLight,
     borderRadius: 10,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
+    color: colors.text,
   },
   phoneInputError: {
-    borderColor: '#ff3b30',
-    backgroundColor: '#fff5f5',
+    borderColor: colors.error,
+    backgroundColor: colors.gray50,
   },
   errorText: {
-    color: '#ff3b30',
+    color: colors.error,
     fontSize: 12,
     marginTop: 8,
   },
   helperText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 12,
     marginTop: 8,
   },
   paymentSummary: {
     padding: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     marginHorizontal: 20,
     borderRadius: 12,
     marginBottom: 20,
@@ -963,7 +1106,7 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 12,
   },
   summaryRow: {
@@ -973,28 +1116,28 @@ const styles = StyleSheet.create({
   },
   totalRow: {
     borderTopWidth: 1,
-    borderTopColor: '#ddd',
+    borderTopColor: colors.borderLight,
     paddingTop: 12,
     marginTop: 4,
   },
   summaryLabel: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   summaryValue: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
     fontWeight: '500',
   },
   totalLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
   },
   totalValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#2ecc71',
+    color: colors.success,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -1008,24 +1151,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.borderLight,
   },
   confirmButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: colors.info,
   },
   cancelButtonText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '600',
     fontSize: 16,
   },
   confirmButtonText: {
-    color: 'white',
+    color: colors.white,
     fontWeight: '600',
     fontSize: 16,
   },
   disabledConfirmButton: {
-    backgroundColor: '#cccccc',
+    backgroundColor: colors.gray400,
   },
 });

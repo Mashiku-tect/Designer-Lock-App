@@ -1,17 +1,25 @@
 import React, { useState,useContext } from 'react';
 import { AuthContext } from '../AuthContext';
 import Toast from 'react-native-toast-message';
+
 import {
   View, Text, TextInput, TouchableOpacity,
   Image, StyleSheet, KeyboardAvoidingView, Platform, SafeAreaView,
-  Alert
+  Alert,ToastAndroid
 } from 'react-native';
 import axios from 'axios';
 import BASE_URL from './Config';
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
+
+
 export default function LoginScreen({ navigation }) {
   const { login } = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+    const { colors, isDarkMode } = useTheme(); // Add this line
+      const styles = createStyles(colors, isDarkMode);
   
 
   const handleLogin = async () => {
@@ -20,28 +28,36 @@ export default function LoginScreen({ navigation }) {
         email,
         password,
       });
-      if(res.data.success){
-Toast.show({
-         type: 'success',
-         text2: res.data.message,
-       });
-        await login(res.data.token)
-      }
-      else{
-        Toast.show({
-         type: 'warning',
-         text2: res.data.message,
-       });
-      }
+    
+if (res.data.success) {
+  const message = res.data.message;
+
+  if (Platform.OS === 'android') {
+    // 🔹 Use Android native toast
+    ToastAndroid.show(message, ToastAndroid.SHORT);
+  } else {
+    // 🔹 Use your fallback toast (react-native-toast-message)
+    Toast.show({
+      type: 'success',
+      text2: message,
+    });
+  }
+
+  await login(res.data.token);
+}
+     
      
       
     } catch (error) {
        const errorMessage = error.response?.data?.message || 'Something went wrong';
-     
+       if(Platform.OS === 'android'){
+        ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
+       }else{
       Toast.show({
           type: 'error',
           text2: errorMessage,
         });
+      }
     }
   };
 
@@ -100,10 +116,10 @@ Toast.show({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8f9fa', // Match your main background color or use a header color
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
@@ -123,13 +139,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 40,
   },
@@ -137,40 +153,41 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.borderLight,
     marginBottom: 15,
     fontSize: 16,
-    shadowColor: '#000',
+    color: colors.text,
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
   loginButton: {
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     padding: 16,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 10,
     marginBottom: 20,
-    shadowColor: '#4a6bff',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 3,
   },
   loginButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 18,
     fontWeight: '600',
   },
   forgotPassword: {
-    color: '#4a6bff',
+    color: colors.primary,
     textAlign: 'center',
     fontSize: 14,
     marginBottom: 30,
@@ -180,14 +197,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 20,
   },
-   footerText: {
-   
-   color: '#333', // better contrast on light background
+  footerText: {
+    color: colors.textSecondary,
     fontSize: 10,
   },
-
   footerLink: {
-    color: '#4a6bff',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
   },

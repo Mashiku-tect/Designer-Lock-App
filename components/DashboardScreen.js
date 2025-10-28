@@ -10,18 +10,22 @@ import { Alert,ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import { Video } from 'expo-av';
-import CustomActivityIndicator from './CustomActivityIndicator';
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
 
 import BASE_URL from './Config';
 
 
 export default function DashboardScreen({ navigation }) {
+  const { colors, isDarkMode } = useTheme(); // Add this line
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [refreshing, setRefreshing] = useState(false); // 🔁 Refresh state
   const [profileImage, setProfileImage] = useState(null);
+
+   const styles = createStyles(colors, isDarkMode);
   
 
   const currentHour = new Date().getHours();
@@ -471,16 +475,17 @@ if (loading) {
   
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 70,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -491,18 +496,18 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 18,
-    color: '#666',
+    color: colors.textSecondary,
   },
   username: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   profileButton: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#e1e1e1',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -513,11 +518,11 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flexDirection: 'row',
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -530,13 +535,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 8,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   clearButton: {
     marginHorizontal: 6,
   },
   searchButton: {
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     padding: 10,
   },
@@ -549,15 +554,15 @@ const styles = StyleSheet.create({
   noResultsText: {
     paddingVertical: 10,
     fontStyle: 'italic',
-    color: '#999',
+    color: colors.textMuted,
   },
   productCard: {
   flex: 1,
   margin: 8,
-  backgroundColor: 'white',
+  backgroundColor: colors.card,
   borderRadius: 10,
   padding: 10,
-  shadowColor: '#000',
+  shadowColor: colors.black,
   shadowOffset: { width: 0, height: 2 },
   shadowOpacity: 0.1,
   shadowRadius: 4,
@@ -576,7 +581,7 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontSize: 14,
-    color: '#4a6bff',
+    color: colors.primary,
     fontWeight: 'bold',
   },
   statsContainer: {
@@ -588,7 +593,7 @@ const styles = StyleSheet.create({
     width: '48%',
     borderRadius: 15,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
@@ -596,38 +601,39 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 24,
-    color: '#fff',
+    color: colors.white,
     fontWeight: 'bold',
   },
   statLabel: {
     fontSize: 14,
-    color: '#eee',
+    color: colors.white,
     marginTop: 4,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 15,
-    color: '#333',
+    color: colors.text,
   },
   orderCard: {
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     padding: 15,
     borderRadius: 10,
     marginBottom: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
     elevation: 2,
+    shadowColor: colors.black,
   },
   orderInfo: {},
   orderClient: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
   },
   orderDate: {
     fontSize: 12,
-    color: '#888',
+    color: colors.textMuted,
   },
   orderMeta: {
     alignItems: 'flex-end',
@@ -639,16 +645,16 @@ const styles = StyleSheet.create({
   orderAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
   },
   bottomMenu: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderTopWidth: 1,
-    borderTopColor: '#ddd',
+    borderTopColor: colors.border,
     paddingVertical: 10,
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -658,7 +664,7 @@ const styles = StyleSheet.create({
   },
   menuText: {
     fontSize: 12,
-    color: '#4a6bff',
+    color: colors.primary,
     marginTop: 4,
   },
    center: {

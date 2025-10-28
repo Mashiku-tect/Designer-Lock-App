@@ -4,6 +4,7 @@ import { StatusBar, ActivityIndicator, View } from "react-native";
 import Toast from "react-native-toast-message";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
+import { ThemeProvider, useTheme } from './components/ThemeContext';
 import * as Linking from "expo-linking";
 
 import LoginScreen from "./components/LoginScreen";
@@ -23,6 +24,8 @@ import VideoUploadScreen from "./components/VideoScreen";
 import FollowingFollower from './components/followersfollowingscreen';
 import PaymentProcessingScreen from "./components/PaymentProcessingScreen";
 import VisitedUserFollowAndFollowersScreen from './components/VisitedUserFollowAndFollowersScreen';
+import ThemeSettingsScreen from "./components/ThemeSettingsScreen";
+import HelpSupportScreen from "./components/HelpAndSupportScreen";
 
 import { AuthProvider, AuthContext } from "./AuthContext";
 
@@ -70,10 +73,24 @@ const AppStack = () => (
     <Stack.Screen name="EditOrderScreen" component={EditOrderScreen} />
     <Stack.Screen name="followerfollowingscreen" component={FollowingFollower} />
     <Stack.Screen name="PaymentProcessingScreen" component={PaymentProcessingScreen} />
-      <Stack.Screen name="VisitedUserFollowAndFollowersScreen" component={VisitedUserFollowAndFollowersScreen} />
-
+    <Stack.Screen name="VisitedUserFollowAndFollowersScreen" component={VisitedUserFollowAndFollowersScreen} />
+    <Stack.Screen name="ThemeSettings" component={ThemeSettingsScreen} />
+    <Stack.Screen name="HelpSupportScreen" component={HelpSupportScreen} />
   </Stack.Navigator>
 );
+
+// StatusBar Component
+const ThemedStatusBar = () => {
+  const { isDarkMode, colors } = useTheme();
+  
+  return (
+    <StatusBar 
+      barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+      backgroundColor={colors.background}
+      translucent={false}
+    />
+  );
+};
 
 // Root Navigation
 const RootNavigation = () => {
@@ -90,11 +107,11 @@ const RootNavigation = () => {
   return userToken ? <AppStack /> : <AuthStack />;
 };
 
-// Main App
-export default function App() {
+// App Content Component
+const AppContent = () => {
   return (
-    <AuthProvider>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+    <>
+      <ThemedStatusBar />
       <NavigationContainer
         linking={linking}
         fallback={<ActivityIndicator size="large" color="#4a6bff" />}
@@ -102,6 +119,17 @@ export default function App() {
         <RootNavigation />
       </NavigationContainer>
       <Toast />
-    </AuthProvider>
+    </>
+  );
+};
+
+// Main App
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

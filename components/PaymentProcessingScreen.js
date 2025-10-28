@@ -10,12 +10,16 @@ import {
   Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'; // or your preferred icon library
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
 
 const { width, height } = Dimensions.get('window');
 
 const PaymentProcessingScreen = ({ navigation }) => {
   const spinValue = new Animated.Value(0);
   const pulseValue = new Animated.Value(1);
+   const { colors, isDarkMode } = useTheme(); // Add this line
+          const styles = createStyles(colors, isDarkMode);
 
   useEffect(() => {
     // Spinning animation
@@ -126,10 +130,10 @@ const PaymentProcessingScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
   backgroundCircle: {
     position: 'absolute',
@@ -138,7 +142,9 @@ const styles = StyleSheet.create({
     width: width * 1.4,
     height: width * 1.4,
     borderRadius: width * 0.7,
-    backgroundColor: 'rgba(99, 102, 241, 0.05)',
+    backgroundColor: colors.isDarkMode 
+      ? 'rgba(99, 102, 241, 0.08)' 
+      : 'rgba(99, 102, 241, 0.05)',
   },
   content: {
     flex: 1,
@@ -158,10 +164,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1f2937',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 24,
-    fontFamily: 'System', // Use your app's font family
+    fontFamily: 'System',
   },
   dotsContainer: {
     flexDirection: 'row',
@@ -171,7 +177,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#6366f1',
+    backgroundColor: colors.primary,
     marginHorizontal: 4,
   },
   dot1: {
@@ -184,12 +190,12 @@ const styles = StyleSheet.create({
     animationDelay: '0.4s',
   },
   messageContainer: {
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     padding: 20,
     borderRadius: 16,
     marginBottom: 24,
     width: '100%',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -207,18 +213,20 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     fontSize: 16,
-    color: '#6b7280',
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   timeEstimate: {
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    backgroundColor: colors.isDarkMode 
+      ? 'rgba(99, 102, 241, 0.15)' 
+      : 'rgba(99, 102, 241, 0.1)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     marginBottom: 32,
   },
   timeText: {
-    color: '#6366f1',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -228,14 +236,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   primaryButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 12,
     flex: 1,
     marginLeft: 12,
     alignItems: 'center',
-    shadowColor: '#6366f1',
+    shadowColor: colors.primary,
     shadowOffset: {
       width: 0,
       height: 4,
@@ -245,12 +253,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   primaryButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
   secondaryButton: {
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 12,
@@ -258,10 +266,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: colors.borderLight,
   },
   secondaryButtonText: {
-    color: '#6b7280',
+    color: colors.textSecondary,
     fontSize: 16,
     fontWeight: '600',
   },

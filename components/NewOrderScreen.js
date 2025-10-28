@@ -1,6 +1,6 @@
 import React, { useState,useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Platform, Alert,ToastAndroid } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,8 +10,11 @@ import Toast from 'react-native-toast-message';
 import { Video } from 'expo-av';
 import axios from 'axios';
 import PhoneInput from 'react-native-phone-number-input';
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
 
 export default function NewOrderScreen({ navigation }) {
+  const { colors, isDarkMode } = useTheme(); // Add this line
   const [formData, setFormData] = useState({
     clientName: '',
     contactNumber: '',
@@ -23,20 +26,33 @@ export default function NewOrderScreen({ navigation }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [productId, setProductId] = useState(null); // New state for product ID
   const phoneInput = useRef(null);
+  const styles = createStyles(colors, isDarkMode);
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
 
     if (!formData.clientName || !formData.designTitle || !formData.price || !formData.contactNumber) {
      // Alert.alert('Required Fields', 'Please fill in all required fields');
-     Toast.show({
+     if(Platform.OS==='android'){
+      ToastAndroid.show('Please fill in all required fields', ToastAndroid.SHORT);
+      return;
+     }
+     else{
+ Toast.show({
          type: 'error',
          text2: 'Please fill in all required fields',
        });
       return;
+     }
+    
     }
     //Validate Phone Number
     if (!phoneInput.current?.isValidNumber(formData.contactNumber)) {
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Invalid phone number', ToastAndroid.SHORT);
+        return;
+       }
+       else{
   Toast.show({
     type: 'error',
     text2: 'Invalid phone number',
@@ -44,13 +60,22 @@ export default function NewOrderScreen({ navigation }) {
   return;
 }
 
+}
+
 
     if(formData.price<1000){
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Price Must Be At least 1000', ToastAndroid.SHORT);
+        return;
+       }else{
+
+      
       Toast.show({
          type: 'info',
          text2: 'Price Must Be At least 1000',
        });
        return;
+        }
     }
 
     setIsSubmitting(true);
@@ -101,11 +126,17 @@ if (response.data.success) {
     } catch (error) {
        const errorMessage =error.response?.data?.message ||'Something Went Wrong';
         
-        
-      Toast.show({
+        if(Platform.OS==='android'){
+          ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
+          return;
+         }
+         else{
+Toast.show({
          type: 'error',
          text2: errorMessage,
        });
+         }
+      
     } finally {
       setIsSubmitting(false);
     }
@@ -115,10 +146,14 @@ if (response.data.success) {
     if (productId) {
       await Clipboard.setStringAsync(productId);
       //Alert.alert('Copied!', 'Product ID has been copied to clipboard');
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Product ID has been copied to clipboard', ToastAndroid.SHORT);
+       }else{
       Toast.show({
                type: 'success',
                text2: 'Product ID has been copied to clipboard',
              });
+            }
              navigation.navigate('Dashboard');
     }
   };
@@ -127,11 +162,17 @@ if (response.data.success) {
   try {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Permission required: We need access to your gallery', ToastAndroid.SHORT);
+        return;
+       }
+       else{
       Toast.show({
         type: 'info',
         text2: 'Permission required: We need access to your gallery',
       });
       return;
+    }
     }
 
     // ✅ Allow both images and videos
@@ -407,12 +448,10 @@ if (response.data.success) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -420,10 +459,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    marginTop:1,
+    borderBottomColor: colors.border,
+    marginTop: 1,
   },
   headerTitleContainer: {
     flex: 1,
@@ -432,7 +471,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: '600',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   headerIcon: {
     width: 24,
@@ -445,11 +484,11 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   formSection: {
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -458,11 +497,11 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 15,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   inputContainer: {
     marginBottom: 18,
@@ -470,25 +509,25 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#555',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     padding: 15,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e1e1e1',
+    borderColor: colors.borderLight,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   // Phone Input Styles
   phoneInputContainer: {
     width: '100%',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e1e1e1',
+    borderColor: colors.borderLight,
     height: 52,
   },
   phoneTextContainer: {
@@ -499,17 +538,17 @@ const styles = StyleSheet.create({
   phoneTextInput: {
     height: 50,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
     backgroundColor: 'transparent',
   },
   phoneCodeText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   phoneFlagButton: {
     width: 60,
     borderRightWidth: 1,
-    borderRightColor: '#e1e1e1',
+    borderRightColor: colors.borderLight,
     marginRight: 8,
   },
   multilineInput: {
@@ -519,7 +558,7 @@ const styles = StyleSheet.create({
   },
   uploadButton: {
     borderWidth: 2,
-    borderColor: '#e1e1e1',
+    borderColor: colors.borderLight,
     borderStyle: 'dashed',
     borderRadius: 12,
     padding: 30,
@@ -530,14 +569,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   uploadButtonText: {
-    color: '#4a6bff',
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
     marginTop: 10,
     marginBottom: 4,
   },
   uploadSubtext: {
-    color: '#999',
+    color: colors.textMuted,
     fontSize: 12,
   },
   uploadedFilesContainer: {
@@ -547,7 +586,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -555,36 +594,36 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
     marginRight: 10,
-    color: '#555',
+    color: colors.textSecondary,
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: colors.border,
   },
   submitButton: {
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
-    shadowColor: '#4a6bff',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 3,
   },
   disabledButton: {
-    backgroundColor: '#cccccc',
+    backgroundColor: colors.gray400,
   },
   submitButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 18,
     fontWeight: '600',
     marginRight: 10,
@@ -598,45 +637,45 @@ const styles = StyleSheet.create({
   successText: {
     textAlign: 'center',
     marginTop: 10,
-    color: '#555',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   productIdContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e1e1e1',
+    borderColor: colors.borderLight,
     overflow: 'hidden',
   },
   productIdInput: {
     flex: 1,
     padding: 15,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   copyButton: {
     padding: 15,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     borderLeftWidth: 1,
-    borderLeftColor: '#e1e1e1',
+    borderLeftColor: colors.borderLight,
   },
   helperText: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     marginTop: 5,
     marginLeft: 5,
   },
   doneButton: {
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
   },
   doneButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },

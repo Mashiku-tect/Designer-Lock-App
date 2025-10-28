@@ -1,7 +1,7 @@
 {
   "expo": {
     "scheme": "myapp",
-    "deepLinks": [],
+    
     "platforms": [
       "ios",
       "android",
@@ -15,8 +15,8 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/lock.png",
-      "resizeMode": "cover",
+      "image": "./assets/splash.jpg",
+      "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {

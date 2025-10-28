@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from './ThemeContext';
 import BASE_URL from './Config';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -32,6 +33,8 @@ const FollowScreen = ({ route, navigation }) => {
   const [error, setError] = useState({ Followers: null, Following: null });
   const [loggedInUserId, setLoggedinUserId] = useState(null);
   const [followLoading, setFollowLoading] = useState({});
+  const { colors, isDarkMode } = useTheme(); // Add this line
+          const styles = createStyles(colors, isDarkMode);
   const fadeAnim = useState(new Animated.Value(0))[0];
 
   // Fetch follows with error handling
@@ -279,7 +282,7 @@ const FollowScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      {/* <StatusBar barStyle="dark-content" backgroundColor="#fff" /> */}
       
       {/* Header */}
       <View style={styles.header}>
@@ -375,10 +378,10 @@ const FollowScreen = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -387,7 +390,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   backButton: {
     padding: 4,
@@ -398,11 +401,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   headerSpacer: {
@@ -411,7 +414,7 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   tab: {
     flex: 1,
@@ -421,16 +424,16 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: '#007AFF',
+    borderBottomColor: colors.primary,
   },
   tabText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   activeTabText: {
-    color: '#007AFF',
+    color: colors.primary,
     fontWeight: '600',
   },
   tabCount: {
@@ -442,13 +445,13 @@ const styles = StyleSheet.create({
   },
   tabCountText: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     fontWeight: '400',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.surface,
     margin: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -460,7 +463,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#000',
+    color: colors.text,
     paddingVertical: 4,
   },
   clearButton: {
@@ -470,11 +473,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   listContentLoading: {
-    paddingHorizontal: 0, // Remove horizontal padding for full-width skeletons
+    paddingHorizontal: 0,
   },
   resultsCount: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 12,
     paddingHorizontal: 16,
   },
@@ -486,7 +489,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f8f8f8',
+    borderBottomColor: colors.border,
   },
   userLeft: {
     flexDirection: 'row',
@@ -498,7 +501,7 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
   },
   userInfo: {
     flex: 1,
@@ -506,16 +509,16 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
+    color: colors.text,
     marginBottom: 2,
   },
   userUsername: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   followsYouBadge: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.surface,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -523,7 +526,7 @@ const styles = StyleSheet.create({
   },
   followsYouText: {
     fontSize: 10,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   followButton: {
@@ -531,15 +534,15 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#007AFF',
-    backgroundColor: '#007AFF',
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
     minWidth: 80,
     alignItems: 'center',
     justifyContent: 'center',
   },
   followingButton: {
     backgroundColor: 'transparent',
-    borderColor: '#ddd',
+    borderColor: colors.borderLight,
   },
   disabledButton: {
     opacity: 0.6,
@@ -547,10 +550,10 @@ const styles = StyleSheet.create({
   followButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
   },
   followingButtonText: {
-    color: '#000',
+    color: colors.text,
   },
   // Full-width Skeleton Styles
   skeletonList: {
@@ -563,8 +566,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f8f8f8',
-    width: screenWidth, // Full width
+    borderBottomColor: colors.border,
+    width: screenWidth,
   },
   skeletonLeft: {
     flexDirection: 'row',
@@ -576,14 +579,14 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
   },
   skeletonTextContainer: {
     flex: 1,
     justifyContent: 'center',
   },
   skeletonText: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     borderRadius: 4,
   },
   skeletonName: {
@@ -598,7 +601,7 @@ const styles = StyleSheet.create({
   skeletonButton: {
     width: 80,
     height: 32,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     borderRadius: 16,
   },
   // Empty state styles
@@ -611,13 +614,13 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 16,
     textAlign: 'center',
   },
   emptyStateSubText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
@@ -625,26 +628,26 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FF6B6B',
+    color: colors.error,
     marginTop: 16,
     textAlign: 'center',
   },
   errorSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },

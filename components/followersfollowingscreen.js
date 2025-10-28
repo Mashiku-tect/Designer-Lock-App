@@ -19,6 +19,8 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
 import BASE_URL from './Config';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -36,6 +38,8 @@ const FollowersFollowingScreen = ({ route, navigation }) => {
   const [error, setError] = useState(null);
   const [followLoading, setFollowLoading] = useState({});
   const fadeAnim = useState(new Animated.Value(0))[0];
+  const { colors, isDarkMode } = useTheme(); // Add this line
+    const styles = createStyles(colors, isDarkMode);
 
   const fetchData = async (isRefreshing = false) => {
     try {
@@ -412,7 +416,7 @@ const FollowersFollowingScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      {/* <StatusBar barStyle="dark-content" /> */}
       
       {renderHeader()}
       {renderTabs()}
@@ -443,10 +447,10 @@ const FollowersFollowingScreen = ({ route, navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -455,7 +459,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: colors.border,
   },
   backButton: {
     padding: 4,
@@ -467,11 +471,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   headerSpacer: {
@@ -480,7 +484,7 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   tab: {
     flex: 1,
@@ -493,15 +497,15 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: '#007AFF',
+    borderBottomColor: colors.primary,
   },
   tabText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   activeTabText: {
-    color: '#007AFF',
+    color: colors.primary,
     fontWeight: '600',
   },
   countContainer: {
@@ -513,8 +517,8 @@ const styles = StyleSheet.create({
   },
   countText: {
     fontSize: 14,
-    color: '#999',
-    backgroundColor: '#f0f0f0',
+    color: colors.textMuted,
+    backgroundColor: colors.gray100,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
@@ -522,12 +526,12 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.surface,
     margin: 16,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.borderLight,
   },
   searchIcon: {
     marginRight: 8,
@@ -536,7 +540,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#000',
+    color: colors.text,
   },
   searchLoading: {
     marginLeft: 8,
@@ -553,7 +557,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   userLeft: {
     flexDirection: 'row',
@@ -565,7 +569,7 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
   },
   userInfo: {
     flex: 1,
@@ -573,38 +577,38 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
+    color: colors.text,
     marginBottom: 2,
   },
   userUsername: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   followButton: {
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#007AFF',
-    backgroundColor: '#007AFF',
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
     minWidth: 80,
     alignItems: 'center',
     justifyContent: 'center',
   },
   followingButton: {
     backgroundColor: 'transparent',
-    borderColor: '#666',
+    borderColor: colors.textSecondary,
   },
   disabledButton: {
     opacity: 0.6,
   },
   followButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600',
   },
   followingButtonText: {
-    color: '#000',
+    color: colors.text,
   },
   // Full-width Skeleton Styles
   skeletonList: {
@@ -617,7 +621,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f8f8f8',
+    borderBottomColor: colors.border,
     width: screenWidth,
   },
   skeletonLeft: {
@@ -630,14 +634,14 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
   },
   skeletonTextContainer: {
     flex: 1,
     justifyContent: 'center',
   },
   skeletonText: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     borderRadius: 4,
   },
   skeletonName: {
@@ -652,7 +656,7 @@ const styles = StyleSheet.create({
   skeletonButton: {
     width: 80,
     height: 32,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     borderRadius: 16,
   },
   // List Styles
@@ -664,7 +668,7 @@ const styles = StyleSheet.create({
   },
   resultsCount: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 12,
     paddingHorizontal: 16,
   },
@@ -678,39 +682,39 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
   errorTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FF6B6B',
+    color: colors.error,
     marginTop: 16,
     textAlign: 'center',
   },
   errorSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },

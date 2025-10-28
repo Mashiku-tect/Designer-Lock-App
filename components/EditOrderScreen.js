@@ -1,5 +1,5 @@
 import React, { useState, useEffect,useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Platform, Alert,ToastAndroid } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,9 +8,12 @@ import axios from 'axios';
 import BASE_URL from './Config';
 import Toast from 'react-native-toast-message';
 import PhoneInput from 'react-native-phone-number-input';
+import { useTheme } from './ThemeContext'; 
 
 export default function EditOrderScreen({ route, navigation }) {
   const { order, onGoBack } = route.params;
+  const { colors, isDarkMode } = useTheme(); // Add this line
+          const styles = createStyles(colors, isDarkMode);
   
   // Function to remove +255 prefix from phone number
   const formatPhoneNumber = (phoneNumber) => {
@@ -49,40 +52,62 @@ export default function EditOrderScreen({ route, navigation }) {
     if (isSubmitting) return;
 
     if (!formData.clientName || !formData.designTitle || !formData.price) {
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Please fill in all required fields', ToastAndroid.SHORT);
+        return;
+       }else{
       Toast.show({
         type: 'error',
         text2: 'Please fill in all required fields',
       });
       return;
     }
+    }
 
     if (!phoneInputRef.current?.isValidNumber(formData.contactNumber)) {
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Invalid phone number', ToastAndroid.SHORT);
+        return;
+       }else{
       Toast.show({
         type: 'error',
         text2: 'Invalid phone number',
       });
       return;
     }
+    }
 
     if(formData.price < 500){
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Price Must Be At Least 500', ToastAndroid.SHORT);
+        return;
+       }else{
       Toast.show({
         type: 'info',
         text2: 'Price Must Be At Least 500',
       });
       return;
     }
+    }
 
     setIsSubmitting(true);
 
     try {
       const token = await AsyncStorage.getItem('userToken');
+      
       if (!token) {
+        if(Platform.OS==='android'){
+          ToastAndroid.show('You must be logged in to edit an order', ToastAndroid.SHORT);
+          setIsSubmitting(false);
+          return;
+         }else{
         Toast.show({
           type: 'error',
           text2: 'You must be logged in to edit an order',
         });
         setIsSubmitting(false);
         return;
+      }
       }
 
       const formDataWithFiles = new FormData();
@@ -113,28 +138,35 @@ export default function EditOrderScreen({ route, navigation }) {
       );
 
       if (response.status === 200) {
-        Toast.show({
+        if(Platform.OS==='android'){
+          ToastAndroid.show('Order updated successfully', ToastAndroid.SHORT);
+         }
+         else{
+           Toast.show({
           type: 'success',
           text2: 'Order updated successfully',
         });
+
+         }
+       
         onGoBack && onGoBack(); // Refresh dashboard data
         navigation.goBack();
-      } else {
-        Toast.show({
-          type: 'error',
-          text2: `Failed to update order: ${response.data.message}`,
-        });
-      }
+      } 
     } catch (error) {
       // Handle axios error response
       const errorMessage = error.response?.data?.message 
         ? `Failed to update order: ${error.response.data.message}`
         : 'An error occurred. Please try again';
-      
-      Toast.show({
+      if(Platform.OS==='android'){
+        ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
+       return;
+      }else{
+ Toast.show({
         type: 'error',
         text2: errorMessage,
       });
+      }
+     
     } finally {
       setIsSubmitting(false);
     }
@@ -162,11 +194,17 @@ export default function EditOrderScreen({ route, navigation }) {
       } else {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permissionResult.granted) {
-          Toast.show({
+          if(Platform.OS==='android'){
+            ToastAndroid.show('We need access to your media library to upload files.', ToastAndroid.SHORT);
+            return;
+           }else{
+Toast.show({
             type: 'info',
             text2: 'We need access to your media library to upload files.',
           });
           return;
+           }
+          
         }
 
         result = await ImagePicker.launchImageLibraryAsync({
@@ -192,11 +230,17 @@ export default function EditOrderScreen({ route, navigation }) {
         }
       }
     } catch (error) {
-      console.error(error);
-      Toast.show({
+     // console.error(error);
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Error uploading files. Please try again', ToastAndroid.SHORT);
+       return;
+      }else{
+ Toast.show({
         type: 'error',
         text2: 'Error uploading files. Please try again',
       });
+      }
+     
     }
   };
 
@@ -393,11 +437,10 @@ export default function EditOrderScreen({ route, navigation }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -405,9 +448,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border,
     marginTop: 20,
   },
   headerTitleContainer: {
@@ -417,7 +460,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   headerIcon: {
     width: 24,
@@ -430,11 +473,11 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   formSection: {
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -443,16 +486,16 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 15,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.border,
   },
   subSectionLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#555',
+    color: colors.textSecondary,
     marginBottom: 10,
     marginTop: 10,
   },
@@ -462,25 +505,25 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#555',
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     padding: 15,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e1e1e1',
+    borderColor: colors.borderLight,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   // Phone Input Styles
   phoneInputContainer: {
     width: '100%',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e1e1e1',
+    borderColor: colors.borderLight,
     height: 52,
   },
   phoneTextContainer: {
@@ -491,22 +534,22 @@ const styles = StyleSheet.create({
   phoneTextInput: {
     height: 50,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
     backgroundColor: 'transparent',
   },
   phoneCodeText: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   phoneFlagButton: {
     width: 60,
     borderRightWidth: 1,
-    borderRightColor: '#e1e1e1',
+    borderRightColor: colors.borderLight,
     marginRight: 8,
   },
   uploadButton: {
     borderWidth: 2,
-    borderColor: '#e1e1e1',
+    borderColor: colors.borderLight,
     borderStyle: 'dashed',
     borderRadius: 12,
     padding: 30,
@@ -517,14 +560,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   uploadButtonText: {
-    color: '#4a6bff',
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
     marginTop: 10,
     marginBottom: 4,
   },
   uploadSubtext: {
-    color: '#999',
+    color: colors.textMuted,
     fontSize: 12,
   },
   uploadedFilesContainer: {
@@ -534,7 +577,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -542,36 +585,36 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
     marginRight: 10,
-    color: '#555',
+    color: colors.textSecondary,
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: colors.border,
   },
   submitButton: {
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
-    shadowColor: '#4a6bff',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 3,
   },
   disabledButton: {
-    backgroundColor: '#cccccc',
+    backgroundColor: colors.gray400,
   },
   submitButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 18,
     fontWeight: '600',
     marginRight: 10,

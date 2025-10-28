@@ -28,6 +28,8 @@ import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { Video, AVPlaybackStatus } from 'expo-av';
 import CustomActivityIndicator from './CustomActivityIndicator';
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
 import BASE_URL from './Config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -55,6 +57,9 @@ const FeedScreen = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchError, setSearchError] = useState(null);
+
+  const { colors, isDarkMode } = useTheme(); // Add this line
+          const styles = createStyles(colors, isDarkMode);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -1081,10 +1086,10 @@ const FeedScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -1093,13 +1098,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
     gap: 12,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   headerButton: {
     padding: 8,
@@ -1109,11 +1114,11 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: colors.borderLight,
     height: 40,
   },
   searchIcon: {
@@ -1122,7 +1127,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#000',
+    color: colors.text,
     paddingVertical: 8,
   },
   // Search results styles
@@ -1137,12 +1142,12 @@ const styles = StyleSheet.create({
   },
   searchResultsContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     margin: 16,
     borderRadius: 12,
     overflow: 'hidden',
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -1153,19 +1158,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
   },
   searchResultsTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
   },
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
   },
   searchResultAvatar: {
     width: 50,
@@ -1179,12 +1184,12 @@ const styles = StyleSheet.create({
   searchResultName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
     marginBottom: 4,
   },
   searchResultBio: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   searchLoadingContainer: {
@@ -1195,7 +1200,7 @@ const styles = StyleSheet.create({
   searchLoadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   searchErrorContainer: {
     padding: 40,
@@ -1205,7 +1210,7 @@ const styles = StyleSheet.create({
   searchErrorText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   emptySearchContainer: {
@@ -1217,13 +1222,13 @@ const styles = StyleSheet.create({
   emptySearchTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySearchText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     textAlign: 'center',
   },
   emptySearchListContent: {
@@ -1245,26 +1250,26 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 16,
-    color: '#999',
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1277,21 +1282,23 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
-  // ... rest of your existing styles remain the same
+  // Feed item styles
   feedItem: {
-    backgroundColor: 'white',
-    marginBottom: 24,
-    borderRadius: 0,
+    backgroundColor: colors.card,
+    marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
+    width: screenWidth,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    width: screenWidth,
   },
   profileInfo: {
     flexDirection: 'row',
@@ -1310,21 +1317,22 @@ const styles = StyleSheet.create({
   designerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
     marginBottom: 2,
   },
   designerRole: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '400',
   },
   whatsappButton: {
     padding: 8,
-    backgroundColor: '#F8F8F8',
+    backgroundColor: colors.surface,
     borderRadius: 20,
   },
   carouselContainer: {
     position: 'relative',
+    width: screenWidth,
   },
   workItem: {
     width: screenWidth,
@@ -1338,7 +1346,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 450,
     position: 'relative',
-    backgroundColor: '#000',
+    backgroundColor: colors.black,
   },
   video: {
     width: '100%',
@@ -1366,7 +1374,7 @@ const styles = StyleSheet.create({
   },
   videoIndicatorText: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginLeft: 4,
     fontWeight: '500',
   },
@@ -1374,7 +1382,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     fontSize: 15,
-    color: '#333',
+    color: colors.text,
     lineHeight: 20,
     fontWeight: '400',
   },
@@ -1388,7 +1396,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   imageCounterText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1409,7 +1417,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 3,
   },
   paginationDotActive: {
-    backgroundColor: 'white',
+    backgroundColor: colors.white,
     width: 20,
   },
   actionBar: {
@@ -1418,6 +1426,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    width: screenWidth,
   },
   actionGroup: {
     flexDirection: 'row',
@@ -1430,46 +1439,49 @@ const styles = StyleSheet.create({
   engagement: {
     paddingHorizontal: 16,
     paddingBottom: 8,
+    width: screenWidth,
   },
   engagementText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
   },
   commentPreview: {
     paddingHorizontal: 16,
     paddingBottom: 8,
+    width: screenWidth,
   },
   viewCommentsText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   previewComment: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
   },
   previewCommentUser: {
     fontWeight: '600',
   },
   noCommentsText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     fontStyle: 'italic',
   },
   timestamp: {
     paddingHorizontal: 16,
     paddingBottom: 16,
+    width: screenWidth,
   },
   timestampText: {
     fontSize: 13,
-    color: '#999',
+    color: colors.textMuted,
     fontWeight: '400',
   },
   // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1477,12 +1489,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
   },
   closeButton: {
     padding: 4,
@@ -1508,7 +1520,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     marginRight: 12,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: colors.gray100,
   },
   commentContent: {
     flex: 1,
@@ -1522,20 +1534,20 @@ const styles = StyleSheet.create({
   commentUserName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
   },
   commentTime: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
   },
   commentText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
     lineHeight: 18,
   },
   sendingText: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     fontStyle: 'italic',
     marginTop: 2,
   },
@@ -1547,13 +1559,13 @@ const styles = StyleSheet.create({
   emptyCommentsText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#999',
+    color: colors.textMuted,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyCommentsSubText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: 40,
   },
@@ -1562,36 +1574,38 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    backgroundColor: 'white',
+    borderTopColor: colors.border,
+    backgroundColor: colors.card,
   },
   commentInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.borderLight,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginRight: 12,
     maxHeight: 100,
     fontSize: 14,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   postCommentButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
   },
   postCommentButtonDisabled: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.gray300,
   },
   postCommentText: {
-    color: 'white',
+    color: colors.white,
     fontWeight: '600',
     fontSize: 14,
   },
   postCommentTextDisabled: {
-    color: '#999',
+    color: colors.textMuted,
   },
   headerIcon: {
     width: 24,
@@ -1600,48 +1614,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 0
   },
-   // Feed Skeleton Styles - Full Width
+  // Feed Skeleton Styles - Full Width
   feedSkeleton: {
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    width: screenWidth, // Full width
+    borderBottomColor: colors.border,
+    width: screenWidth,
   },
   skeletonHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16, // Add horizontal padding
+    paddingHorizontal: 16,
     paddingVertical: 16,
-    width: screenWidth, // Full width
+    width: screenWidth,
   },
   skeletonAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     marginRight: 12,
   },
   skeletonUserInfo: {
     flex: 1,
   },
   skeletonText: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     borderRadius: 4,
   },
   skeletonMedia: {
-    width: screenWidth, // Full width
-    marginBottom: 0, // Remove margin
+    width: screenWidth,
+    marginBottom: 0,
   },
   skeletonImage: {
-    width: screenWidth, // Full width
+    width: screenWidth,
     height: 450,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
   },
   skeletonActions: {
-    paddingHorizontal: 16, // Add horizontal padding
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    width: screenWidth, // Full width
+    width: screenWidth,
   },
   skeletonActionButtons: {
     flexDirection: 'row',
@@ -1649,34 +1663,33 @@ const styles = StyleSheet.create({
   },
   skeletonButton: {
     height: 24,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     borderRadius: 4,
   },
   skeletonEngagement: {
-    paddingHorizontal: 16, // Add horizontal padding
+    paddingHorizontal: 16,
     paddingBottom: 8,
-    width: screenWidth, // Full width
+    width: screenWidth,
   },
   skeletonComments: {
-    paddingHorizontal: 16, // Add horizontal padding
+    paddingHorizontal: 16,
     paddingBottom: 8,
-    width: screenWidth, // Full width
+    width: screenWidth,
   },
-
   // Comment Skeleton Styles - Full Width
   commentSkeleton: {
     flexDirection: 'row',
-    paddingHorizontal: 16, // Full width padding
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    width: screenWidth, // Full width
+    width: screenWidth,
     borderBottomWidth: 1,
-    borderBottomColor: '#f8f8f8',
+    borderBottomColor: colors.border,
   },
   skeletonCommentAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     marginRight: 12,
   },
   skeletonCommentContent: {
@@ -1687,73 +1700,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-
   // Update the loading container to be full width
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-
-  // Update feed item to match skeleton width
-  feedItem: {
-    backgroundColor: 'white',
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    width: screenWidth, // Make actual feed items full width too
-  },
-
-  // Update header to be full width
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    width: screenWidth, // Full width
-  },
-
-  // Update carousel container to be full width
-  carouselContainer: {
-    position: 'relative',
-    width: screenWidth, // Full width
-  },
-
-  // Update work item to be full width
-  workItem: {
-    width: screenWidth, // Full width
-    paddingBottom: 16,
-  },
-
-  // Update action bar to be full width
-  actionBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    width: screenWidth, // Full width
-  },
-
-  // Update engagement to be full width
-  engagement: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    width: screenWidth, // Full width
-  },
-
-  // Update comment preview to be full width
-  commentPreview: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    width: screenWidth, // Full width
-  },
-
-  // Update timestamp to be full width
-  timestamp: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    width: screenWidth, // Full width
+    backgroundColor: colors.background,
   },
 });
 

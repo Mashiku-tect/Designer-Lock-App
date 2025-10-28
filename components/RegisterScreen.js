@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
 import BASE_URL from './Config';
 import {
   View,
@@ -12,6 +14,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  ToastAndroid,
 } from 'react-native';
 
 // Import phone number input
@@ -25,17 +28,27 @@ export default function RegisterScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false); 
+   const { colors, isDarkMode } = useTheme(); // Add this line
+        const styles = createStyles(colors, isDarkMode);
 
   const phoneInput = useRef(null);
 
   const handleRegister = async () => {
     //first check if all inputs are field
     if(!firstname||!lastname||!email||!phonenumber||!password){
+      if(Platform.OS === 'android'){
+        ToastAndroid.show('Please Fill All Required Fields', ToastAndroid.SHORT);
+      }else{
       Toast.show({ type: 'error', text2: 'Please Fill All Required Fields' });
+      }
       return;
     }
     if (password !== confirmPassword) {
+      if(Platform.OS === 'android'){
+        ToastAndroid.show('Passwords do not match', ToastAndroid.SHORT);
+      }else{
       Toast.show({ type: 'error', text2: 'Passwords do not match' });
+      }
       return;
     }
 
@@ -44,7 +57,11 @@ export default function RegisterScreen({ navigation }) {
     // ✅ Validate phone number
     const isValid = phoneInput.current?.isValidNumber(phonenumber);
     if (!isValid) {
+      if(Platform.OS === 'android'){
+        ToastAndroid.show('Invalid phone number', ToastAndroid.SHORT);
+      }else{
       Toast.show({ type: 'error', text2: 'Invalid phone number' });
+      }
       return;
     }
 
@@ -59,24 +76,29 @@ export default function RegisterScreen({ navigation }) {
       });
      //check for the returned response
      if(res.data.success){
+      if(Platform.OS === 'android'){
+        ToastAndroid.show(res.data.message, ToastAndroid.SHORT);
+      }else{
        Toast.show({
         type: 'success',
         text2: res.data.message,
       });
+    }
      }
     
      
       navigation.navigate('Login');
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.message ||
-        'Registration failed. Please try again.';
-
-      Toast.show({
+      const errorMessage =error.response?.data?.message || 'Registration failed. Please try again.';
+      if(Platform.OS === 'android'){
+        ToastAndroid.show(errorMessage, ToastAndroid.SHORT);
+      }else{
+ Toast.show({
         type: 'error',
         text2: errorMessage,
       });
-      //console.log("error",errorMessage);
+      }
+     
     }
     finally {
       setIsLoading(false); // 👈 stop loading (success or error)
@@ -197,10 +219,10 @@ export default function RegisterScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background,
   },
   scrollContainer: {
     flexGrow: 1,
@@ -214,13 +236,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 30,
   },
@@ -228,15 +250,16 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.borderLight,
     marginBottom: 15,
     fontSize: 16,
-    shadowColor: '#000',
+    color: colors.text,
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -247,31 +270,31 @@ const styles = StyleSheet.create({
     height: 55,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.borderLight,
     marginBottom: 15,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     elevation: 2,
   },
   phoneTextContainer: {
     paddingVertical: 0,
     borderRadius: 10,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
   },
   registerButton: {
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     padding: 16,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 10,
     marginBottom: 20,
-    shadowColor: '#4a6bff',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 3,
   },
   registerButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 18,
     fontWeight: '600',
   },
@@ -280,13 +303,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   termsText: {
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     fontSize: 13,
     lineHeight: 18,
   },
   linkText: {
-    color: '#4a6bff',
+    color: colors.primary,
     fontWeight: '500',
   },
   footer: {
@@ -297,7 +320,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   footerLink: {
-    color: '#4a6bff',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
   },

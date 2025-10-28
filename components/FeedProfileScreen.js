@@ -23,6 +23,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Video } from 'expo-av';
+import { useTheme } from './ThemeContext'; 
 import BASE_URL from './Config';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -30,6 +31,9 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const DesignerProfileScreen = ({ route, navigation }) => {
   const { designer } = route.params;
   const designerId = typeof designer === 'object' ? designer.id : designer;
+
+  const { colors, isDarkMode } = useTheme(); // Add this line
+          const styles = createStyles(colors, isDarkMode);
   
   // State declarations
   const [activeTab, setActiveTab] = useState('works');
@@ -1326,10 +1330,10 @@ const renderCommentSkeleton = () => (
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -1338,7 +1342,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 25,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
   },
   backButton: {
     padding: 4,
@@ -1346,7 +1350,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   menuButton: {
     padding: 4,
@@ -1357,7 +1361,7 @@ const styles = StyleSheet.create({
   profileHeader: {
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
   },
   avatarContainer: {
     position: 'relative',
@@ -1368,31 +1372,31 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 4,
-    borderColor: '#F8F8F8',
+    borderColor: colors.surface,
   },
   verifiedBadge: {
     position: 'absolute',
     bottom: 4,
     right: 4,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
     borderRadius: 12,
     padding: 2,
   },
   profileName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1D1D1F',
+    color: colors.text,
     marginBottom: 4,
   },
   profileRole: {
     fontSize: 16,
-    color: '#007AFF',
+    color: colors.primary,
     fontWeight: '500',
     marginBottom: 12,
   },
   profileBio: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24,
@@ -1411,12 +1415,12 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1D1D1F',
+    color: colors.text,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   actionButtons: {
@@ -1427,20 +1431,20 @@ const styles = StyleSheet.create({
   },
   followButton: {
     flex: 2,
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
   },
   followButtonText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
   messageButton: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#F8F8F8',
+    backgroundColor: colors.surface,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
@@ -1448,14 +1452,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   messageButtonText: {
-    color: '#007AFF',
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
   },
   tabContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
   },
   tab: {
     flex: 1,
@@ -1464,7 +1468,7 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#007AFF',
+    borderBottomColor: colors.primary,
   },
   worksGrid: {
     padding: 1,
@@ -1483,7 +1487,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'relative',
-    backgroundColor: '#000',
+    backgroundColor: colors.black,
   },
   videoOverlay: {
     position: 'absolute',
@@ -1524,7 +1528,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   likeCount: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1537,7 +1541,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
     marginBottom: 16,
   },
   infoItem: {
@@ -1548,7 +1552,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 15,
-    color: '#333',
+    color: colors.text,
     fontWeight: '400',
   },
   skillsSection: {
@@ -1560,20 +1564,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   skillTag: {
-    backgroundColor: '#F8F8F8',
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
   },
   skillText: {
     fontSize: 13,
-    color: '#333',
+    color: colors.text,
     fontWeight: '500',
   },
   // Vertical Modal Styles
   verticalModalContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: colors.background,
   },
   verticalModalHeader: {
     flexDirection: 'row',
@@ -1581,12 +1585,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
   },
   verticalModalTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   closeButton: {
     padding: 4,
@@ -1607,7 +1611,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     position: 'relative',
-    backgroundColor: '#000',
+    backgroundColor: colors.black,
   },
   video: {
     width: '100%',
@@ -1635,7 +1639,7 @@ const styles = StyleSheet.create({
   },
   videoIndicatorText: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginLeft: 4,
     fontWeight: '500',
   },
@@ -1657,12 +1661,12 @@ const styles = StyleSheet.create({
   postUserName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
     marginBottom: 2,
   },
   postCategory: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
   },
   carouselContainer: {
     position: 'relative',
@@ -1682,7 +1686,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   imageCounterText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1703,7 +1707,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 3,
   },
   paginationDotActive: {
-    backgroundColor: 'white',
+    backgroundColor: colors.white,
     width: 20,
   },
   postActionBar: {
@@ -1728,7 +1732,7 @@ const styles = StyleSheet.create({
   likesText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
   },
   postDescription: {
     paddingHorizontal: 16,
@@ -1736,11 +1740,11 @@ const styles = StyleSheet.create({
   },
   userNameText: {
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
   },
   descriptionText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
     lineHeight: 18,
   },
   commentsPreview: {
@@ -1749,12 +1753,12 @@ const styles = StyleSheet.create({
   },
   viewCommentsText: {
     fontSize: 14,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   previewComment: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
     marginBottom: 2,
   },
   previewCommentUser: {
@@ -1762,7 +1766,7 @@ const styles = StyleSheet.create({
   },
   noCommentsText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     fontStyle: 'italic',
   },
   postTimestamp: {
@@ -1771,13 +1775,13 @@ const styles = StyleSheet.create({
   },
   timestampText: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     fontWeight: '400',
   },
   // Comments Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1785,12 +1789,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
   },
   commentsList: {
     flex: 1,
@@ -1812,6 +1816,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     marginRight: 12,
+    backgroundColor: colors.gray100,
   },
   commentContent: {
     flex: 1,
@@ -1825,20 +1830,20 @@ const styles = StyleSheet.create({
   commentUserName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1D1D1F',
+    color: colors.text,
   },
   commentTime: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
   },
   commentText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
     lineHeight: 18,
   },
   sendingText: {
     fontSize: 12,
-    color: '#999',
+    color: colors.textMuted,
     fontStyle: 'italic',
     marginTop: 2,
   },
@@ -1850,13 +1855,13 @@ const styles = StyleSheet.create({
   emptyCommentsText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#999',
+    color: colors.textMuted,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyCommentsSubText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: 40,
   },
@@ -1865,40 +1870,42 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    backgroundColor: 'white',
+    borderTopColor: colors.border,
+    backgroundColor: colors.card,
   },
   commentInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.borderLight,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginRight: 12,
     maxHeight: 100,
     fontSize: 14,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   postCommentButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
   },
   postCommentButtonDisabled: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.gray300,
   },
   postCommentText: {
-    color: 'white',
+    color: colors.white,
     fontWeight: '600',
     fontSize: 14,
   },
   postCommentTextDisabled: {
-    color: '#999',
+    color: colors.textMuted,
   },
   noSkillsText: {
     fontStyle: 'italic',
-    color: '#888',
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 10,
   },
@@ -1912,33 +1919,33 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#666',
+    color: colors.textSecondary,
     marginTop: 16,
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 16,
-    color: '#999',
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 8,
   },
   emptyHint: {
     fontSize: 14,
-    color: '#999',
+    color: colors.textMuted,
     textAlign: 'center',
     fontStyle: 'italic',
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: 'white',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1950,19 +1957,18 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
   },
   // Skeleton styles
   skeleton: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.gray200,
     borderRadius: 4,
   },
   skeletonText: {
     borderRadius: 2,
   },
-
   // added styles
-   imageContainer: {
+  imageContainer: {
     width: '100%',
     height: '100%',
     position: 'relative',
@@ -1974,7 +1980,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.8)',
   },
   skeletonText: {
-    color: '#fff',
+    color: colors.white,
     marginTop: 8,
     fontSize: 14,
   },
@@ -1986,19 +1992,18 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
     marginTop: 8,
     textAlign: 'center',
   },
   errorSubtext: {
-    color: '#ccc',
+    color: colors.gray400,
     fontSize: 14,
     marginTop: 4,
     textAlign: 'center',
   },
-
   // Comment Skeleton Styles
   commentSkeleton: {
     flexDirection: 'row',
@@ -2009,7 +2014,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: colors.gray100,
     marginRight: 12,
   },
   skeletonCommentContent: {
@@ -2023,13 +2028,12 @@ const styles = StyleSheet.create({
   commentLoadingContainer: {
     paddingVertical: 8,
   },
-
   // Update existing styles for better media handling
   videoContainer: {
     width: '100%',
     height: '100%',
     position: 'relative',
-    backgroundColor: '#000',
+    backgroundColor: colors.black,
   },
   mediaItem: {
     width: screenWidth,

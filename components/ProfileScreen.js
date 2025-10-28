@@ -11,18 +11,52 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
-  Platform
+  Platform,
+  ToastAndroid
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialIcons, Feather, Entypo, AntDesign } from '@expo/vector-icons';
 import axios from 'axios';
 import { useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+//import Toast from 'react-native-toast-message';
+import { useTheme } from './ThemeContext'; 
+import ThemeToggle from './ThemeToggle';
 import Toast from 'react-native-toast-message';
 import BASE_URL from './Config';
 
 const ProfileScreen = ({ navigation }) => {
   const { logout, userToken } = useContext(AuthContext);
+  const { colors, isDarkMode } = useTheme(); // Add this line
+  const styles = createStyles(colors, isDarkMode);
+  // Reusable Info Item Component
+const InfoItem = ({ icon, label, value, onPress }) => (
+  <TouchableOpacity style={styles.infoItem} onPress={onPress}>
+    <View style={styles.infoIcon}>
+      <Feather name={icon} size={20} color="#888" />
+    </View>
+    <View style={styles.infoTextContainer}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+    <Feather name="edit-2" size={18} color="#888" />
+  </TouchableOpacity>
+);
+
+// Reusable Action Button Component
+const ActionButton = ({ icon, label, onPress, isLast }) => (
+  <TouchableOpacity 
+    style={[
+      styles.actionButton, 
+      !isLast && styles.actionButtonBorder
+    ]} 
+    onPress={onPress}
+  >
+    <Feather name={icon} size={20} color="#888" />
+    <Text style={styles.actionButtonText}>{label}</Text>
+    <Entypo name="chevron-right" size={20} color="#888" />
+  </TouchableOpacity>
+);
 
   const [user, setUser] = useState(null);
   const [profileImage, setProfileImage] = useState(null);
@@ -65,8 +99,18 @@ const ProfileScreen = ({ navigation }) => {
 
         setProfileImage(fullImageUrl);
       } catch (error) {
-        Alert.alert('Error', 'Failed to load user data');
-        console.error(error);
+        if(Platform.OS==='android'){
+          ToastAndroid.show('Failed to load user data', ToastAndroid.SHORT);
+          return;
+          }else{
+             Toast.show({
+                    type: 'error',
+                    text2: 'Failed to load user data',
+                  });
+         return;
+        //Alert.alert('Error', 'Failed to load user data');
+        //console.error(error);
+          }
       } finally {
         setLoading(false);
       }
@@ -75,12 +119,7 @@ const ProfileScreen = ({ navigation }) => {
     fetchUserData();
   }, [userToken]);
 
-  // Refresh when screen is focused
-  // useFocusEffect(
-  //   useCallback(() => {
-  //     fetchUserData();
-  //   }, [])
-  // );
+  
 
    const handleFollower = () => {
     navigation.navigate('followerfollowingscreen', { userId: user.id,receivedactivetab:'followers' }); // replace with your target screen
@@ -119,10 +158,27 @@ const ProfileScreen = ({ navigation }) => {
 
       setProfileImage(response.data.profileImageUrl);
       setUser((prev) => ({ ...prev, profileImage: response.data.profileImageUrl }));
-      Alert.alert('Success', 'Profile image updated successfully');
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Profile image updated successfully', ToastAndroid.SHORT);
+      }else{
+        Toast.show({
+                    type: 'success',
+                    text2: 'Profile image updated successfully',
+                  });
+      }
+     // Alert.alert('Success', 'Profile image updated successfully');
     } catch (error) {
-      Alert.alert('Error', 'Failed to upload profile image');
-      console.error(error);
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Failed to upload profile image', ToastAndroid.SHORT);
+        return;
+      }else{
+        Toast.show({
+                    type: 'error',
+                    text2: 'Failed to upload profile image',
+                  });
+                }
+     // Alert.alert('Error', 'Failed to upload profile image');
+     // console.error(error);
     } finally {
       setUploading(false);
       setModalVisible(false);
@@ -149,8 +205,18 @@ const ProfileScreen = ({ navigation }) => {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission required', 'We need camera permission to take photos');
-      return;
+      if(Platform.OS==='android'){
+        ToastAndroid.show('We need camera permission to take photos', ToastAndroid.SHORT);
+        return;
+      }else{
+         Toast.show({
+                    type: 'error',  
+                    text2: 'We need camera permission to take photos',
+                  });
+                   return;
+                }
+      //Alert.alert('Permission required', 'We need camera permission to take photos');
+     
     }
 
     let result = await ImagePicker.launchCameraAsync({
@@ -188,8 +254,18 @@ const ProfileScreen = ({ navigation }) => {
       setEditField(null);
       setEditValue('');
     } catch (error) {
-      Alert.alert('Error', `Failed to update profile ${error.response.data.error}`);
-      console.error(error);
+      if(Platform.OS==='android'){
+        ToastAndroid.show(`Failed to update profile ${error.response.data.error}`, ToastAndroid.SHORT);
+        return;
+      }else{
+          Toast.show({
+                    type: 'error',
+                    text2: `Failed to update profile ${error.response.data.error}`,
+                  });
+                  return;
+                }
+    //  Alert.alert('Error', `Failed to update profile ${error.response.data.error}`);
+      //console.error(error);
     } finally {
       setLoading(false);
     }
@@ -198,11 +274,16 @@ const ProfileScreen = ({ navigation }) => {
   // Add a new skill
   const addSkill = async () => {
     if (newSkill.trim() === '') {
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Skill is Required', ToastAndroid.SHORT);
+        return;
+      }else{
       Toast.show({
                  type: 'error',
                  text2: "Skill is Required",
                });
                return;
+              }
     }
     
     try {
@@ -213,10 +294,14 @@ const ProfileScreen = ({ navigation }) => {
         },
       });
       if(response.data.success){
+        if(Platform.OS==='android'){
+          ToastAndroid.show(response.data.newskill+" skill added successfully", ToastAndroid.SHORT);
+        }else{
         Toast.show({
                  type: 'success',
                  text2: response.data.newskill+" skill added successfully",
                });
+              }
 
       }
        const updatedSkills = response.data.skills || [];
@@ -225,10 +310,17 @@ const ProfileScreen = ({ navigation }) => {
     } catch (error) {
       //Alert.alert('Error', 'Failed to add skill');
       //console.error(error);
+      if(Platform.OS==='android'){
+        ToastAndroid.show(error.response.data.message, ToastAndroid.SHORT);
+        return;
+      }else{
       Toast.show({
                  type: 'error',
                  text2: error.response.data.message,
                });
+
+               return;
+              }
     }
   };
 
@@ -242,10 +334,14 @@ const ProfileScreen = ({ navigation }) => {
         },
       });
       if(response.data.success){
+        if(Platform.OS==='android'){
+          ToastAndroid.show(response.data.removedskill+" skill removed successfully", ToastAndroid.SHORT);
+        }else{
         Toast.show({
                  type: 'success',
                  text2: response.data.removedskill+" skill removed successfully",
                });
+              }
                 const updatedSkills = skills.filter((s) => s.id !== index);
     setSkills(updatedSkills);
       }
@@ -253,11 +349,18 @@ const ProfileScreen = ({ navigation }) => {
      
     } catch (error) {
      // Alert.alert('Error', 'Failed to delete skill');
-     console.error(error);
+
+     //console.error(error);
+      if(Platform.OS==='android'){
+        ToastAndroid.show('Failed to delete skill', ToastAndroid.SHORT);
+        return;
+      }else{
      Toast.show({
                  type: 'error',
                  text2: 'Failed to delete skill',
                });
+               return;
+              }
     }
   };
 
@@ -502,13 +605,13 @@ const ProfileScreen = ({ navigation }) => {
           <ActionButton 
             icon="settings" 
             label="Settings" 
-            //onPress={() => navigation.navigate('Settings')}
+            onPress={() => navigation.navigate('ThemeSettings')}
           />
           
           <ActionButton 
             icon="help-circle" 
             label="Help & Support" 
-            //onPress={() => navigation.navigate('Help')}
+            onPress={() => navigation.navigate('HelpSupportScreen')}
           />
           
           <ActionButton 
@@ -595,40 +698,12 @@ const ProfileScreen = ({ navigation }) => {
   );
 };
 
-// Reusable Info Item Component
-const InfoItem = ({ icon, label, value, onPress }) => (
-  <TouchableOpacity style={styles.infoItem} onPress={onPress}>
-    <View style={styles.infoIcon}>
-      <Feather name={icon} size={20} color="#888" />
-    </View>
-    <View style={styles.infoTextContainer}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-    <Feather name="edit-2" size={18} color="#888" />
-  </TouchableOpacity>
-);
 
-// Reusable Action Button Component
-const ActionButton = ({ icon, label, onPress, isLast }) => (
-  <TouchableOpacity 
-    style={[
-      styles.actionButton, 
-      !isLast && styles.actionButtonBorder
-    ]} 
-    onPress={onPress}
-  >
-    <Feather name={icon} size={20} color="#888" />
-    <Text style={styles.actionButtonText}>{label}</Text>
-    <Entypo name="chevron-right" size={20} color="#888" />
-  </TouchableOpacity>
-);
 
-const styles = StyleSheet.create({
+const createStyles = (colors, isDarkMode) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    
+    backgroundColor: colors.background,
   },
   scrollContainer: {
     paddingBottom: 30,
@@ -638,15 +713,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '600',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   profileImageContainer: {
     alignItems: 'center',
@@ -662,14 +736,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 160,
     bottom: 0,
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: colors.white,
   },
   nameContainer: {
     alignItems: 'center',
@@ -678,16 +752,16 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     marginBottom: 5,
   },
   section: {
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     padding: 15,
     marginHorizontal: 15,
     marginBottom: 15,
     borderRadius: 12,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -702,21 +776,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
   },
   bioText: {
     fontSize: 14,
-    color: '#555',
+    color: colors.textSecondary,
     lineHeight: 20,
   },
   infoText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
     lineHeight: 20,
   },
   placeholderText: {
     fontSize: 14,
-    color: '#888',
+    color: colors.textMuted,
     fontStyle: 'italic',
   },
   editIcon: {
@@ -732,14 +806,16 @@ const styles = StyleSheet.create({
   addItemInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.borderLight,
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
     marginRight: 10,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   addItemButton: {
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     width: 44,
     height: 44,
     borderRadius: 8,
@@ -753,7 +829,7 @@ const styles = StyleSheet.create({
   itemChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e9ecef',
+    backgroundColor: colors.gray100,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -762,11 +838,11 @@ const styles = StyleSheet.create({
   },
   itemChipText: {
     fontSize: 14,
-    color: '#333',
+    color: colors.text,
     marginRight: 6,
   },
   deleteItemButton: {
-    backgroundColor: '#ff4444',
+    backgroundColor: colors.error,
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -776,12 +852,12 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     padding: 20,
     marginHorizontal: 15,
     marginBottom: 15,
     borderRadius: 12,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
@@ -793,12 +869,12 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.text,
     marginBottom: 5,
   },
   statLabel: {
     fontSize: 10,
-    color: '#888',
+    color: colors.textMuted,
   },
   infoItem: {
     flexDirection: 'row',
@@ -814,12 +890,12 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 12,
-    color: '#888',
+    color: colors.textMuted,
     marginBottom: 2,
   },
   infoValue: {
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
   },
   actionButton: {
     flexDirection: 'row',
@@ -829,12 +905,12 @@ const styles = StyleSheet.create({
   },
   actionButtonBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border,
   },
   actionButtonText: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: colors.text,
     marginLeft: 10,
   },
   modalOverlay: {
@@ -845,25 +921,26 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: '85%',
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 20,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
     marginBottom: 20,
     textAlign: 'center',
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.borderLight,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
     marginBottom: 20,
-    color: '#333',
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -874,21 +951,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   modalButtonPrimary: {
-    backgroundColor: '#4a6bff',
+    backgroundColor: colors.primary,
     borderRadius: 6,
     marginLeft: 10,
   },
   modalButtonText: {
     fontSize: 16,
-    color: '#888',
+    color: colors.textSecondary,
   },
   modalButtonPrimaryText: {
     fontSize: 16,
-    color: 'white',
+    color: colors.white,
   },
   imageModalContainer: {
     width: '90%',
-    backgroundColor: 'white',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 0,
     paddingBottom: 10,
@@ -898,12 +975,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: colors.border,
   },
   imageOptionText: {
     fontSize: 16,
     marginLeft: 15,
-    color: '#333',
+    color: colors.text,
   },
   imageOptionCancel: {
     justifyContent: 'center',
@@ -913,7 +990,7 @@ const styles = StyleSheet.create({
   imageOptionTextCancel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4a6bff',
+    color: colors.primary,
   },
   center: {
     flex: 1,
@@ -921,56 +998,56 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  //added style sheet
+  // Loading styles
   loadingContainer: {
-  flex: 1,
-  backgroundColor: '#f8f9fa',
-},
-loadingHeader: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: 20,
-  backgroundColor: 'white',
-  borderBottomWidth: 1,
-  borderBottomColor: '#eee',
-},
-loadingContent: {
-  flex: 1,
-  alignItems: 'center',
-  paddingTop: 20,
-},
-loadingProfileImage: {
-  width: 120,
-  height: 120,
-  borderRadius: 60,
-  backgroundColor: '#f0f0f0',
-  justifyContent: 'center',
-  alignItems: 'center',
-  marginBottom: 20,
-},
-loadingStats: {
-  flexDirection: 'row',
-  justifyContent: 'space-around',
-  width: '100%',
-  paddingHorizontal: 20,
-  marginBottom: 20,
-},
-loadingStatItem: {
-  alignItems: 'center',
-},
-loadingSection: {
-  backgroundColor: 'white',
-  padding: 15,
-  marginHorizontal: 15,
-  marginBottom: 15,
-  borderRadius: 12,
-  width: '90%',
-},
-skeleton: {
-  backgroundColor: '#E0E0E0',
-  borderRadius: 4,
-},
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  loadingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  loadingContent: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: 20,
+  },
+  loadingProfileImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.gray100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  loadingStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  loadingStatItem: {
+    alignItems: 'center',
+  },
+  loadingSection: {
+    backgroundColor: colors.card,
+    padding: 15,
+    marginHorizontal: 15,
+    marginBottom: 15,
+    borderRadius: 12,
+    width: '90%',
+  },
+  skeleton: {
+    backgroundColor: colors.gray200,
+    borderRadius: 4,
+  },
 });
 
 export default ProfileScreen;
